@@ -1,0 +1,19 @@
+2025/03/31-03:01:48.791 8503 Reusing MANIFEST /Users/fhaziefer/Documents/NGODING/BACKEND/wwwebjs-bot/localAuthSession/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/03/31-03:01:48.791 8503 Recovering log #370
+2025/03/31-03:01:48.799 8503 Reusing old log /Users/fhaziefer/Documents/NGODING/BACKEND/wwwebjs-bot/localAuthSession/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000370.log 
+2025/03/31-03:01:50.637 1f313 Level-0 table #378: started
+2025/03/31-03:01:50.643 1f313 Level-0 table #378: 127244 bytes OK
+2025/03/31-03:01:50.651 1f313 Delete type=0 #370
+2025/03/31-03:01:50.651 1f313 Manual compaction at level-0 from '\x00Y\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00Z\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/03/31-03:01:52.118 13003 Compacting 1@1 + 4@2 files
+2025/03/31-03:01:52.174 13003 Generated table #379@1: 55996 keys, 2226888 bytes
+2025/03/31-03:01:52.210 13003 Generated table #380@1: 24291 keys, 2184642 bytes
+2025/03/31-03:01:52.271 13003 Generated table #381@1: 85715 keys, 2238131 bytes
+2025/03/31-03:01:52.281 13003 Generated table #382@1: 6354 keys, 124644 bytes
+2025/03/31-03:01:52.281 13003 Compacted 1@1 + 4@2 files => 6774305 bytes
+2025/03/31-03:01:52.289 13003 compacted to: files[ 0 0 4 0 0 0 0 ]
+2025/03/31-03:01:52.289 13003 Delete type=2 #374
+2025/03/31-03:01:52.289 13003 Delete type=2 #375
+2025/03/31-03:01:52.289 13003 Delete type=2 #372
+2025/03/31-03:01:52.289 13003 Delete type=2 #373
+2025/03/31-03:01:52.289 13003 Delete type=2 #378

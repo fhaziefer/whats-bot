@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp Web Client</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        color: #fff;
+      }
+      .container {
+        text-align: center;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        max-width: 90%;
+        width: 600px;
+      }
+      #status {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 1.5rem;
+        color: #fff;
+      }
+      #qr-code {
+        display: none;
+        margin-top: 1.5rem;
+        animation: fadeIn 0.5s ease-in-out;
+      }
+      #qr-code img {
+        width: 100%;
+        max-width: 300px;
+        height: auto;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      }
+      #terminal {
+        background: rgba(0, 0, 0, 0.7);
+        color: #7df9ff;
+        font-family: "Courier New", monospace;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-top: 1.5rem;
+        max-height: 300px;
+        overflow-y: auto;
+        text-align: left;
+      }
+      #memory-usage {
+        background: rgba(0, 0, 0, 0.7);
+        color: #00ff00;
+        font-family: "Courier New", monospace;
+        text-align: center;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-top: 1rem;
+        text-align: center;
+      }
+      #uptime {
+        background: rgba(0, 0, 0, 0.7);
+        color: #ffa500;
+        font-family: "Courier New", monospace;
+        text-align: center;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-top: 1rem;
+        text-align: center;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (max-width: 600px) {
+        .container {
+          padding: 1.5rem;
+          width: 90%;
+        }
+        #status {
+          font-size: 1.2rem;
+        }
+        #qr-code img {
+          max-width: 250px;
+        }
+      }
+      #qr-code:hover img {
+        transform: scale(1.05);
+        transition: transform 0.3s ease;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="status">Loading...</div>
+      <div id="qr-code">
+        <img id="qr-image" src="" alt="QR Code" />
+      </div>
+      <div id="terminal">
+        <pre id="log"></pre>
+      </div>
+      <div id="memory-usage">
+        <pre>Memory Usage: Loading...</pre>
+      </div>
+      <div id="uptime">
+        <pre>Uptime: Loading...</pre>
+      </div>
+    </div>
+
+    <script>
+      let ws;
+
+      function connectWebSocket() {
+        // UBAH ALAMAT WEBSOCKET KETIKA INGIN MENYAMBUNGKAN DENGAN NGROK
+        ws = new WebSocket(`http://localhost:8080`);
+
+        ws.onmessage = (event) => {
+          const message = JSON.parse(event.data);
+
+          if (message.type === "qr") {
+            console.log("QR code received");
+            document.getElementById("status").style.display = "none";
+            document.getElementById("qr-code").style.display = "block";
+
+            QRCode.toDataURL(
+              message.qr,
+              { width: 300, margin: 2 },
+              (error, url) => {
+                if (error) {
+                  console.error("Error generating QR code:", error);
+                  return;
+                }
+                document.getElementById("qr-image").src = url;
+              }
+            );
+          } else if (message.type === "status") {
+            if (message.ready) {
+              console.log("WhatsApp Bot is ready");
+              document.getElementById("status").innerText =
+                "WhatsApp Bot is ready!";
+              document.getElementById("status").style.display = "block";
+              document.getElementById("qr-code").style.display = "none";
+            } else {
+              console.log("WhatsApp Bot is not ready");
+              document.getElementById("status").innerText = "Loading...";
+              document.getElementById("status").style.display = "block";
+              document.getElementById("qr-code").style.display = "none";
+            }
+          } else if (message.type === "log") {
+            const logElement = document.getElementById("log");
+            logElement.textContent += message.message + "\n";
+            logElement.scrollTop = logElement.scrollHeight;
+          } else if (message.type === "memoryUsage") {
+            const memoryUsage = message.memoryUsage;
+            const memoryInfo = `MEMORY USAGE
+
+RSS: ${memoryUsage.rss} MB
+Heap Total: ${memoryUsage.heapTotal} MB
+Heap Used: ${memoryUsage.heapUsed} MB
+External: ${memoryUsage.external} MB
+Chromium: ${memoryUsage.chromiumMemory} MB
+Total: ${memoryUsage.totalMemory} MB`;
+            document.getElementById(
+              "memory-usage"
+            ).innerHTML = `<pre>${memoryInfo}</pre>`;
+          } else if (message.type === "uptime") {
+            const { hours, minutes, seconds } = message.uptime;
+            const uptimeInfo = `SERVER UPTIME 
+
+${hours} hours
+${minutes} minutes
+${seconds} seconds`;
+            document.getElementById(
+              "uptime"
+            ).innerHTML = `<pre>${uptimeInfo}</pre>`;
+          }
+        };
+
+        ws.onclose = () => {
+          console.log("Disconnected from server");
+          document.getElementById("status").innerText =
+            "Disconnected. Reconnecting...";
+          document.getElementById("status").style.display = "block";
+          document.getElementById("qr-code").style.display = "none";
+
+          // Coba reconnect setelah 3 detik
+          setTimeout(() => {
+            connectWebSocket();
+          }, 3000);
+        };
+      }
+
+      connectWebSocket(); // Mulai koneksi WebSocket
+    </script>
+  </body>
+</html>

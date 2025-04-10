@@ -1,0 +1,26 @@
+{
+  "name": "wwwebjs-bot",
+  "version": "1.0.0",
+  "description": "trying whatsapp bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "keywords": [],
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.12.0",
+    "nodemon": "^3.1.9",
+    "pidusage": "^4.0.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "whatsapp-web.js": "^1.26.0",
+    "wwebjs-mongo": "^1.1.0"
+  }
+}
