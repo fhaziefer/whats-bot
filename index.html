@@ -126,7 +126,7 @@
 
       function connectWebSocket() {
         // UBAH ALAMAT WEBSOCKET KETIKA INGIN MENYAMBUNGKAN DENGAN NGROK
-        ws = new WebSocket(`http://localhost:8080`);
+        ws = new WebSocket(`http://localhost:3100`);
 
         ws.onmessage = (event) => {
           const message = JSON.parse(event.data);
