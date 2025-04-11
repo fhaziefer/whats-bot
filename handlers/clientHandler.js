@@ -22,7 +22,7 @@ function setupLogger(wss) {
   };
 }
 
-async function initializeClient() {
+async function initializeClient(client) {
   try {
     await client.initialize();
     console.log('Client initialized successfully');
@@ -119,7 +119,7 @@ function setupClientHandlers(client, startTime, wss) {
     client.initialize();
   });
 
-  initializeClient();
+  initializeClient(client);
 }
 
 module.exports = { setupClientHandlers };
