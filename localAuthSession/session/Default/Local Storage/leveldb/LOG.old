@@ -1,3 +1,3 @@
-2025/03/31-03:01:34.215 b503 Reusing MANIFEST /Users/fhaziefer/Documents/NGODING/BACKEND/wwwebjs-bot/localAuthSession/session/Default/Local Storage/leveldb/MANIFEST-000001
-2025/03/31-03:01:34.215 b503 Recovering log #8
-2025/03/31-03:01:34.215 b503 Reusing old log /Users/fhaziefer/Documents/NGODING/BACKEND/wwwebjs-bot/localAuthSession/session/Default/Local Storage/leveldb/000008.log 
+2025/04/11-10:39:04.587 10995 Reusing MANIFEST /root/whats-bot/localAuthSession/session/Default/Local Storage/leveldb/MANIFEST-000001
+2025/04/11-10:39:04.593 10995 Recovering log #49
+2025/04/11-10:39:04.593 10995 Reusing old log /root/whats-bot/localAuthSession/session/Default/Local Storage/leveldb/000049.log 

@@ -56,22 +56,27 @@ mongoose
     // });
 
     // Inisialisasi WhatsApp client dengan LocalAuth
-    const client = new Client({
-      authStrategy: new LocalAuth({
+const client = new Client({
+    authStrategy: new LocalAuth({
         dataPath: "localAuthSession"
-      }),
-      puppeteer: {
+    }),
+    puppeteer: {
         headless: true,
+        executablePath: '/usr/bin/chromium-browser',
         args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--disable-gpu",
-          "--window-size=1920x1080",
-        ],
-      },
-    });
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-accelerated-2d-canvas",
+            "--disable-gpu",
+            "--window-size=1920x1080"
+        ]
+    },
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+    }
+});
 
     // Setup routes
     app.use("/", routes);
@@ -102,7 +107,7 @@ mongoose
 
     // Start server
     server.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server is running on port ${PORT}`);
+      console.log(`Server is running on port ${PORT} | 3100`);
     });
   })
   .catch((err) => {
