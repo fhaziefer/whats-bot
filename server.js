@@ -68,19 +68,25 @@ function getUptime() {
 // Inisialisasi WhatsApp client dengan LocalAuth
 const client = new Client({
   authStrategy: new LocalAuth({
-    dataPath: "localAuthSession" // Folder untuk menyimpan session data
+    dataPath: "localAuthSession"
   }),
   puppeteer: {
-    headless: true,
+    // headless: true,
+    headless: false,
     executablePath: '/usr/bin/chromium-browser',
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--single-process", // <- tambahkan ini untuk environment dengan resource terbatas
       "--disable-gpu",
       "--window-size=1920x1080"
-    ]
+    ],
+    ignoreHTTPSErrors: true,
+    userDataDir: './chromeCache' // tambahkan direktori cache khusus
   },
   webVersionCache: {
     type: 'remote',

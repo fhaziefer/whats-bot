@@ -22,6 +22,20 @@ function setupLogger(wss) {
   };
 }
 
+async function initializeClient() {
+  try {
+    await client.initialize();
+    console.log('Client initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize client:', error);
+    // Coba restart setelah delay
+    setTimeout(() => {
+      console.log('Attempting to reinitialize client...');
+      initializeClient();
+    }, 5000);
+  }
+}
+
 function setupClientHandlers(client, startTime, wss) {
   // Setup logger untuk mengirim log ke frontend
   setupLogger(wss);
@@ -83,6 +97,14 @@ function setupClientHandlers(client, startTime, wss) {
   client.on("call", async (call) => {
     await handleCall(call, client); // Gunakan callHandler
   });
+  
+  client.on('loading_screen', (percent, message) => {
+    console.log(`Loading: ${percent}% - ${message}`);
+  });
+
+    client.on('authenticated', () => {
+    console.log('AUTHENTICATED');
+    });
 
   client.on("auth_failure", (msg) => {
     console.error("Authentication failed:", msg);
@@ -97,7 +119,7 @@ function setupClientHandlers(client, startTime, wss) {
     client.initialize();
   });
 
-  client.initialize();
+  initializeClient();
 }
 
 module.exports = { setupClientHandlers };
