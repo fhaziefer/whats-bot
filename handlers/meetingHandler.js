@@ -12,32 +12,23 @@ const unlink = fs.promises.unlink;
 const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
-  console.log(`Processing image: ${path.basename(imagePath)}`);
+  console.log(`Memproses gambar: ${path.basename(imagePath)}`);
 
-  // Gunakan versi worker yang lebih stabil
   const worker = await createWorker({
-    cachePath: "./tesseract-cache",
-    workerPath: "tesseract.js/src/worker-script/node/index.js", // Path alternatif
+    logger: (m) => console.log(m.status), // Logger sederhana
+    cacheMethod: "none",
     lang: "ind+eng",
-    gzip: false,
   });
 
   try {
-    console.log("Starting OCR process...");
+    await worker.load();
+    await worker.initialize("ind+eng");
     const {
       data: { text },
     } = await worker.recognize(imagePath);
-    console.log(`Successfully extracted ${text.length} characters`);
     return text;
-  } catch (error) {
-    console.error("OCR Processing Error:", error);
-    throw error;
   } finally {
-    try {
-      await worker.terminate();
-    } catch (terminateError) {
-      console.error("Worker termination error:", terminateError);
-    }
+    await worker.terminate();
   }
 }
 
@@ -161,58 +152,76 @@ async function handleMeeting(message, botInfo) {
   }
 
   let text = message.body || "";
-  let isImage = false;
 
-  // Proses gambar
+  // Proses gambar jika ada
   if (message.hasMedia) {
     try {
       const media = await message.downloadMedia();
-      if (media?.mimetype?.startsWith('image/')) {
-        const tempDir = "./temp";
-        try {
-          await fs.mkdir(tempDir, { recursive: true });
-        } catch (err) {
-          if (err.code !== 'EEXIST') throw err;
-        }
+      if (!media || !media.mimetype.startsWith("image/")) {
+        console.log("Bukan gambar yang valid");
+        return false;
+      }
 
-        const ext = media.mimetype.split('/')[1] || 'jpg';
-        const filePath = path.join(tempDir, `invite_${Date.now()}.${ext}`);
-        
-        await fs.writeFile(filePath, media.data, "base64");
-        text = await extractTextFromImage(filePath);
-        await fs.unlink(filePath);
-        isImage = true;
+      // Buat folder temp jika belum ada (dengan callback)
+      const tempDir = "./temp";
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
 
-        if (!text || text.trim().length < 20) {
-          console.log('Insufficient text extracted');
-          return false;
-        }
+      const fileExt = media.mimetype.split("/")[1] || "jpg";
+      const filePath = path.join(tempDir, `undangan_${Date.now()}.${fileExt}`);
+
+      // Gunakan writeFileSync untuk menghindari promise issues
+      fs.writeFileSync(filePath, media.data, "base64");
+      console.log("Gambar disimpan di:", filePath);
+
+      text = await extractTextFromImage(filePath);
+      fs.unlinkSync(filePath); // Hapus file setelah diproses
+
+      if (!text || text.length < 20) {
+        console.log("Teks tidak terdeteksi dalam gambar");
+        return false;
       }
     } catch (error) {
-      console.error('Media Processing Error:', error);
+      console.error("Error memproses gambar:", error);
       return false;
     }
   }
 
-  // Proses undangan
+  // Cek apakah ini undangan
+  if (!/(undangan|rapat|wekdalipun|panggenanipun)/i.test(text)) {
+    return false;
+  }
+
   try {
-    if (!/(undangan|rapat|wekdalipun|panggenanipun)/i.test(text)) return false;
-    
-    const details = extractMeetingDetails(text);
-    console.log('Meeting details extracted:', details);
-    
-    await new Promise(resolve => setTimeout(resolve, 15000));
-    await message.reply(createShortReply(details));
-    
-    return true;
-  } catch (error) {
-    console.error('Invitation Processing Error:', error);
-    await new Promise(resolve => setTimeout(resolve, 15000));
+    const details = {
+      meetingType:
+        text.match(
+          /undangan\s*(.*?)(?=\s*(?:hari|tanggal|wekdalipun|dilaksanakan))/i
+        )?.[1] || "rapat penting",
+      date: text.match(/hari\s*:\s*(.*?)(?:\n|$)/i)?.[1] || "akan ditentukan",
+      time: (
+        text.match(/wekdalipun\s*:\s*(.*?)(?:\n|$)/i)?.[1] || "00.00"
+      ).replace(/\./g, ":"),
+      location:
+        text.match(/panggenanipun\s*:\s*(.*?)(?:\n|$)/i)?.[1] ||
+        "akan ditentukan",
+    };
+
+    // Delay 15 detik
+    await new Promise((resolve) => setTimeout(resolve, 15000));
+
+    // Kirim balasan
     await message.reply(
       `Wa'alaikumussalam Wr. Wb.\n\n` +
-      `Matur nuwun sanget kagem undanganipun.\n\n` +
-      `Wassalamu'alaikum Wr. Wb.`
+        `Matur nuwun sanget kagem undanganipun.\n` +
+        `Njeh, insyaAllah dalem usahaaken saget hadir dateng acara ${details.meetingType}\n\n` +
+        `Wassalamu'alaikum Wr. Wb.`
     );
+
+    return true;
+  } catch (error) {
+    console.error("Error memproses undangan:", error);
     return false;
   }
 }
