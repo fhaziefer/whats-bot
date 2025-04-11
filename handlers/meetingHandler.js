@@ -18,16 +18,8 @@ async function extractTextFromImage(imagePath) {
   try {
     worker = await createWorker({
       logger: (m) => console.log(m.status),
-      workerPath: path.join(
-        __dirname,
-        "node_modules",
-        "tesseract.js",
-        "src",
-        "worker",
-        "node",
-        "index.js"
-      ), // Node-specific worker
-      langPath: path.join(__dirname, "node_modules", "tesseract.js-core"), // Local language data
+      // Simplified configuration - let the package handle its own paths
+      langPath: "https://tessdata.projectnaptha.com/4.0.0",
     });
 
     await worker.loadLanguage("eng");
