@@ -1,3 +1,3 @@
-2025/04/11-10:39:05.688 10a91 Reusing MANIFEST /root/whats-bot/localAuthSession/session/Default/Local Storage/leveldb/MANIFEST-000001
-2025/04/11-10:39:05.698 10a91 Recovering log #49
-2025/04/11-10:39:05.700 10a91 Reusing old log /root/whats-bot/localAuthSession/session/Default/Local Storage/leveldb/000049.log 
+2025/04/11-10:45:20.213 11772 Reusing MANIFEST /root/whats-bot/localAuthSession/session/Default/Local Storage/leveldb/MANIFEST-000001
+2025/04/11-10:45:20.226 11772 Recovering log #52
+2025/04/11-10:45:20.226 11772 Reusing old log /root/whats-bot/localAuthSession/session/Default/Local Storage/leveldb/000052.log 

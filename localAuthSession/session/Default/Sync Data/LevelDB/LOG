@@ -1,3 +1,3 @@
-2025/04/11-10:39:05.681 10a73 Reusing MANIFEST /root/whats-bot/localAuthSession/session/Default/Sync Data/LevelDB/MANIFEST-000001
-2025/04/11-10:39:05.681 10a73 Recovering log #3
-2025/04/11-10:39:05.682 10a73 Reusing old log /root/whats-bot/localAuthSession/session/Default/Sync Data/LevelDB/000003.log 
+2025/04/11-10:45:20.192 1175a Reusing MANIFEST /root/whats-bot/localAuthSession/session/Default/Sync Data/LevelDB/MANIFEST-000001
+2025/04/11-10:45:20.197 1175a Recovering log #3
+2025/04/11-10:45:20.197 1175a Reusing old log /root/whats-bot/localAuthSession/session/Default/Sync Data/LevelDB/000003.log 
