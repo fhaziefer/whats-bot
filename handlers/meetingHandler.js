@@ -1,69 +1,119 @@
-// handlers/meetingHandler.js
-function handleMeeting(message, botInfo) {
-  const messageBody = message.body;
-  const senderName = message._data.notifyName || "Bapak/Ibu";
-  const senderNumber = message.from;
-  const isGroup = senderNumber.includes("@g.us");
+const { createWorker } = require("tesseract.js");
+const fs = require("fs");
+const path = require("path");
+const moment = require("moment-hijri");
+moment.locale("id");
 
-  // Perbaikan kondisi untuk mencegah bot membalas pesannya sendiri
+// Fungsi untuk ekstrak teks dari gambar
+async function extractTextFromImage(imagePath) {
+  const worker = await createWorker();
+  try {
+    await worker.loadLanguage("ind+eng");
+    await worker.initialize("ind+eng");
+    const {
+      data: { text },
+    } = await worker.recognize(imagePath);
+    return text;
+  } finally {
+    await worker.terminate();
+  }
+}
+
+// Fungsi untuk mengekstrak detail undangan
+function extractMeetingDetails(text) {
+  const meetingType =
+    text.match(
+      /undangan\s*(.*?)(?=\s*(?:hari|wekdalipun|tanggal|dilaksanakan))/i
+    )?.[1] ||
+    text.match(/acara\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i)?.[1] ||
+    "rapat penting";
+
+  const dateMatch =
+    text.match(/Hari\s*:\s*(.*?)(?:\n|$)/i)?.[1] ||
+    text.match(/Tanggal\s*:\s*(.*?)(?:\n|$)/i)?.[1] ||
+    "hari yang akan ditentukan";
+
+  const timeMatch = (
+    text.match(/Wekdalipun\s*:\s*(.*?)(?:\n|$)/i)?.[1] ||
+    text.match(/Waktu\s*:\s*(.*?)(?:\n|$)/i)?.[1] ||
+    "00.00"
+  ).replace(/\./g, ":");
+
+  const location =
+    text.match(/Panggenanipun\s*:\s*(.*?)(?:\n|$)/i)?.[1] ||
+    text.match(/Tempat\s*:\s*(.*?)(?:\n|$)/i)?.[1] ||
+    "tempat yang akan ditentukan";
+
+  return {
+    meetingType: meetingType.trim(),
+    date: dateMatch.trim(),
+    time: timeMatch.trim(),
+    location: location.trim(),
+  };
+}
+
+// Fungsi untuk membuat balasan singkat
+function createShortReply(details) {
+  return (
+    `Wa'alaikumussalam Wr. Wb.\n\n` +
+    `Matur nuwun sanget kagem undanganipun.\n` +
+    `Njeh, insyaAllah dalem usahaaken saget hadir dateng acara ${details.meetingType}\n\n` +
+    `Wassalamu'alaikum Wr. Wb.`
+  );
+}
+
+// Fungsi utama untuk menangani undangan
+async function handleMeeting(message, botInfo) {
+  // Jangan balas jika pesan dari bot sendiri atau group
   if (
-    senderNumber === `${botInfo?.botNumber}@c.us` || 
-    senderNumber === "status@broadcast" ||
-    isGroup
+    message.from === `${botInfo?.botNumber}@c.us` ||
+    message.from.includes("@g.us")
   ) {
     return false;
   }
 
-  // Check if message contains meeting keywords
-  const isMeetingMessage =
-    /undangan\s*\*.*\*|rapat\s*\*.*\*|wekdalipun|panggenanipun|dilaksanakan|dinten|hari\s*:/i.test(
-      messageBody
-    );
+  let text = message.body || "";
 
-  if (!isMeetingMessage) return false;
+  // Jika pesan mengandung gambar
+  if (message.hasMedia) {
+    try {
+      const media = await message.downloadMedia();
+      if (media && ["image/jpeg", "image/png"].includes(media.mimetype)) {
+        const tempDir = "./temp";
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+        const filename = `undangan_${Date.now()}.${
+          media.mimetype.split("/")[1]
+        }`;
+        const filePath = path.join(tempDir, filename);
+
+        fs.writeFileSync(filePath, media.data, "base64");
+        text = await extractTextFromImage(filePath);
+        fs.unlinkSync(filePath);
+      }
+    } catch (error) {
+      console.error("Error processing image:", error);
+    }
+  }
+
+  // Cek apakah ini undangan
+  if (!/(undangan|rapat|wekdalipun|panggenanipun)/i.test(text)) {
+    return false;
+  }
 
   try {
-    // Extract meeting information
-    const meetingType =
-      messageBody.match(/(?:undangan|rapat)\s*\*(.*?)\*/i)?.[1]?.trim() ||
-      "rapat penting";
+    // Ekstrak detail undangan
+    const details = extractMeetingDetails(text);
 
-    const dateMatch =
-      messageBody.match(/hari\s*:\s*(.*?)\n/i)?.[1] ||
-      messageBody.match(/dinten\s*(.*?)\s*(?=wekdalipun|$)/i)?.[1] ||
-      "hari yang akan ditentukan";
+    // Tambah delay 15 detik sebelum membalas
+    await new Promise((resolve) => setTimeout(resolve, 15000));
 
-    const timeMatch = (
-      messageBody.match(/wekdalipun\s*:\s*([^\n(]+)/i)?.[1] ||
-      messageBody.match(/jam\s*([^\s(]+)/i)?.[1] ||
-      "00.00"
-    ).replace(/\./g, ":");
+    // Kirim balasan singkat
+    await message.reply(createShortReply(details));
 
-    const location =
-      messageBody.match(/panggenanipun\s*:\s*(.*?)(?:\n|$)/i)?.[1]?.trim() ||
-      messageBody.match(/tempat\s*:\s*(.*?)(?:\n|$)/i)?.[1]?.trim() ||
-      "tempat yang akan ditentukan";
-
-    // Create reply message in Javanese formal style
-    const replyMessage =
-      `Wa'alaikumussalam Wr. Wb.\n\n` +
-      `Matur nuwun sanget kagem undanganipun.\n` +
-      `Njeh, insyaAllah dalem usahaaken saget hadir dateng acara ${meetingType}\n\n` +
-      `Wassalamu'alaikum Wr. Wb.`;
-
-    // Send reply
-    message.reply(replyMessage);
-    console.log(
-      `\n\n\n===UNDANGAN===\n\nAcara: ${meetingType}\nHari: ${dateMatch}\nWaktu: ${timeMatch}\nLokasi Acara: ${location}\n\n\n`
-    );
     return true;
   } catch (error) {
-    // Fallback reply if parsing fails
-    message.reply(
-      `Wa'alaikumussalam Wr. Wb.\n\n` +
-        `Matur nuwun sanget kagem undanganipun.\n` +
-        `Njeh, insyaAllah dalem usahaaken saget hadir dateng acaraipun.`
-    );
+    console.error("Error processing invitation:", error);
     return false;
   }
 }
