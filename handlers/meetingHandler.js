@@ -6,14 +6,15 @@ const momentHijri = require("moment-hijri");
 moment.locale("id");
 momentHijri.locale("id");
 
-// Promisified file operations
-const writeFile = promisify(fs.writeFile);
-const unlink = promisify(fs.unlink);
-const mkdir = promisify(fs.mkdir);
+// Promisify file operations
+const writeFile = fs.promises.writeFile;
+const unlink = fs.promises.unlink;
+const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
   console.log(`Processing image: ${path.basename(imagePath)}`);
   
+  // Gunakan konfigurasi minimal tanpa logger function
   const worker = await createWorker({
     cacheMethod: 'none',
     workerPath: require.resolve('tesseract.js/dist/worker.min.js'),
@@ -24,26 +25,37 @@ async function extractTextFromImage(imagePath) {
     const { data: { text } } = await worker.recognize(imagePath);
     console.log(`Extracted ${text.length} characters`);
     return text;
+  } catch (error) {
+    console.error('OCR Error:', error);
+    throw error;
   } finally {
-    await worker.terminate();
+    try {
+      await worker.terminate();
+    } catch (terminateError) {
+      console.error('Worker termination error:', terminateError);
+    }
   }
 }
 
 function convertToHijriDate(gregorianDate) {
   try {
-    if (!gregorianDate) return "tanggal belum ditentukan";
+    if (!gregorianDate || typeof gregorianDate !== 'string') {
+      return "tanggal belum ditentukan";
+    }
     
-    // Clean date string
+    // Clean the date string
     const cleanedDate = gregorianDate
       .replace(/[^\w\s\d-]/g, '')
-      .replace(/\b(\d{1,2})\b/g, '0$1');
+      .replace(/\s+/g, ' ')
+      .trim();
     
     // Try multiple date formats
     const formats = [
       "DD MMMM YYYY",
-      "DD-MM-YYYY", 
+      "DD-MM-YYYY",
+      "D MMMM YYYY",
       "DD/MM/YYYY",
-      "D MMMM YYYY"
+      "YYYY-MM-DD"
     ];
     
     let mDate;
@@ -54,7 +66,7 @@ function convertToHijriDate(gregorianDate) {
     
     if (!mDate.isValid()) {
       console.warn(`Invalid date format: ${gregorianDate}`);
-      return gregorianDate; // Return original if can't parse
+      return gregorianDate;
     }
     
     const hijriDate = momentHijri(mDate).format("iD iMMMM iYYYY");
@@ -63,13 +75,16 @@ function convertToHijriDate(gregorianDate) {
     return `${gregorianFormatted} (${hijriDate} H)`;
   } catch (error) {
     console.error("Date conversion error:", error);
-    return gregorianDate; // Fallback to original date
+    return gregorianDate;
   }
 }
 
 function extractMeetingDetails(text) {
+  if (!text || typeof text !== 'string' || text.length < 10) {
+    throw new Error('Invalid text input');
+  }
+
   const getMatch = (patterns, defaultValue = '') => {
-    if (!text) return defaultValue;
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match && match[1]) return match[1].trim();
@@ -116,7 +131,9 @@ function createShortReply(details) {
 
 async function handleMeeting(message, botInfo) {
   // Skip if from bot itself or group
-  if (message.from === `${botInfo?.botNumber}@c.us` || message.from.includes("@g.us")) {
+  if (!message || !botInfo || 
+      message.from === `${botInfo?.botNumber}@c.us` || 
+      message.from.includes("@g.us")) {
     return false;
   }
 
@@ -129,8 +146,10 @@ async function handleMeeting(message, botInfo) {
       const media = await message.downloadMedia();
       if (media && media.mimetype.startsWith('image/')) {
         const tempDir = "./temp";
-        if (!fs.existsSync(tempDir)) {
+        try {
           await mkdir(tempDir, { recursive: true });
+        } catch (mkdirError) {
+          if (mkdirError.code !== 'EEXIST') throw mkdirError;
         }
 
         const fileExt = media.mimetype.split('/')[1] || 'jpg';
@@ -141,7 +160,7 @@ async function handleMeeting(message, botInfo) {
         await unlink(filePath);
         isImage = true;
 
-        if (!text || text.length < 20) {
+        if (!text || text.trim().length < 20) {
           console.log('No valid text extracted from image');
           return false;
         }
@@ -159,7 +178,7 @@ async function handleMeeting(message, botInfo) {
 
   try {
     const details = extractMeetingDetails(text);
-    console.log('Extracted details:', details);
+    console.log('Extracted details:', JSON.stringify(details, null, 2));
     
     await new Promise(resolve => setTimeout(resolve, 15000)); // 15s delay
     await message.reply(createShortReply(details));
