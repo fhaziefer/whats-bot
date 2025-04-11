@@ -27,6 +27,18 @@ const interval = setInterval(() => {
   });
 }, 25000);
 
+wss.on('connection', (ws) => {
+    console.log('New WebSocket connection');
+    
+    ws.on('close', (code, reason) => {
+        console.log(`WebSocket closed with code ${code}, reason: ${reason}`);
+    });
+    
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+});
+
 // Handle close
 wss.on('close', () => {
   clearInterval(interval);

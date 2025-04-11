@@ -1,311 +1,338 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WhatsApp Web Client</title>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      background: linear-gradient(135deg, #1e3c72, #2a5298);
-      color: #fff;
-    }
-    .container {
-      text-align: center;
-      background: rgba(255, 255, 255, 0.1);
-      padding: 2rem;
-      border-radius: 15px;
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      max-width: 90%;
-      width: 600px;
-    }
-    #status {
-      font-size: 1.5rem;
-      font-weight: bold;
-      margin-bottom: 1.5rem;
-      color: #fff;
-    }
-    #qr-code {
-      display: none;
-      margin-top: 1.5rem;
-      animation: fadeIn 0.5s ease-in-out;
-    }
-    #qr-code img {
-      width: 100%;
-      max-width: 300px;
-      height: auto;
-      border-radius: 10px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-    #terminal {
-      background: rgba(0, 0, 0, 0.7);
-      color: #7df9ff;
-      font-family: "Courier New", monospace;
-      padding: 1rem;
-      border-radius: 5px;
-      margin-top: 1.5rem;
-      max-height: 300px;
-      overflow-y: auto;
-      text-align: left;
-    }
-    #memory-usage {
-      background: rgba(0, 0, 0, 0.7);
-      color: #00ff00;
-      font-family: "Courier New", monospace;
-      text-align: center;
-      padding: 1rem;
-      border-radius: 5px;
-      margin-top: 1rem;
-    }
-    #uptime {
-      background: rgba(0, 0, 0, 0.7);
-      color: #ffa500;
-      font-family: "Courier New", monospace;
-      text-align: center;
-      padding: 1rem;
-      border-radius: 5px;
-      margin-top: 1rem;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @media (max-width: 600px) {
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp Web Client</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        color: #fff;
+      }
       .container {
-        padding: 1.5rem;
-        width: 90%;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        max-width: 90%;
+        width: 600px;
       }
       #status {
-        font-size: 1.2rem;
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 1.5rem;
+        color: #fff;
+      }
+      #qr-code {
+        display: none;
+        margin-top: 1.5rem;
+        animation: fadeIn 0.5s ease-in-out;
       }
       #qr-code img {
-        max-width: 250px;
+        width: 100%;
+        max-width: 300px;
+        height: auto;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
       }
-    }
-    #qr-code:hover img {
-      transform: scale(1.05);
-      transition: transform 0.3s ease;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div id="status">Connecting to server...</div>
-    <div id="qr-code">
-      <img id="qr-image" src="" alt="QR Code" />
+      #terminal {
+        background: rgba(0, 0, 0, 0.7);
+        color: #7df9ff;
+        font-family: "Courier New", monospace;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-top: 1.5rem;
+        max-height: 300px;
+        overflow-y: auto;
+        text-align: left;
+      }
+      #memory-usage {
+        background: rgba(0, 0, 0, 0.7);
+        color: #00ff00;
+        font-family: "Courier New", monospace;
+        text-align: center;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-top: 1rem;
+      }
+      #uptime {
+        background: rgba(0, 0, 0, 0.7);
+        color: #ffa500;
+        font-family: "Courier New", monospace;
+        text-align: center;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-top: 1rem;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (max-width: 600px) {
+        .container {
+          padding: 1.5rem;
+          width: 90%;
+        }
+        #status {
+          font-size: 1.2rem;
+        }
+        #qr-code img {
+          max-width: 250px;
+        }
+      }
+      #qr-code:hover img {
+        transform: scale(1.05);
+        transition: transform 0.3s ease;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="status">Connecting to server...</div>
+      <div id="qr-code">
+        <img id="qr-image" src="" alt="QR Code" />
+      </div>
+      <div id="terminal">
+        <pre id="log"></pre>
+      </div>
+      <div id="memory-usage">
+        <pre>Memory Usage: Loading...</pre>
+      </div>
+      <div id="uptime">
+        <pre>Uptime: Loading...</pre>
+      </div>
     </div>
-    <div id="terminal">
-      <pre id="log"></pre>
-    </div>
-    <div id="memory-usage">
-      <pre>Memory Usage: Loading...</pre>
-    </div>
-    <div id="uptime">
-      <pre>Uptime: Loading...</pre>
-    </div>
-  </div>
 
-<script>
-    let ws;
-    let reconnectAttempts = 0;
-    const maxReconnectAttempts = 10;
-    const initialReconnectDelay = 1000;
-    const maxReconnectDelay = 30000;
-    let currentReconnectDelay = initialReconnectDelay;
-    let pingInterval;
-    let connectionMonitorInterval;
+    <script>
+      let ws;
+      let reconnectAttempts = 0;
+      const maxReconnectAttempts = 10;
+      const initialReconnectDelay = 1000;
+      const maxReconnectDelay = 30000;
+      let currentReconnectDelay = initialReconnectDelay;
+      let pingInterval;
+      let connectionMonitorInterval;
 
-    // Gunakan path /ws untuk WebSocket endpoint
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const wsUrl = `${wsProtocol}${window.location.host}/ws`;  // Perhatikan /ws di akhir
+      // Gunakan path /ws untuk WebSocket endpoint
+      const wsProtocol =
+        window.location.protocol === "https:" ? "wss://" : "ws://";
+      const wsUrl = `${wsProtocol}${window.location.host}/ws`; // Perhatikan /ws di akhir
 
-    // Cache DOM elements
-    const statusElement = document.getElementById("status");
-    const qrCodeElement = document.getElementById("qr-code");
-    const qrImageElement = document.getElementById("qr-image");
-    const logElement = document.getElementById("log");
-    const memoryUsageElement = document.getElementById("memory-usage");
-    const uptimeElement = document.getElementById("uptime");
+      // Cache DOM elements
+      const statusElement = document.getElementById("status");
+      const qrCodeElement = document.getElementById("qr-code");
+      const qrImageElement = document.getElementById("qr-image");
+      const logElement = document.getElementById("log");
+      const memoryUsageElement = document.getElementById("memory-usage");
+      const uptimeElement = document.getElementById("uptime");
 
-    function connectWebSocket() {
+      function connectWebSocket() {
         console.log(`Attempting to connect to WebSocket at ${wsUrl}`);
-        
+
         // Tutup koneksi sebelumnya jika ada
-        if (ws && ws.readyState !== WebSocket.CLOSED) {
+        if (ws) {
+          ws.onopen = null;
+          ws.onmessage = null;
+          ws.onerror = null;
+          ws.onclose = null;
+          if (ws.readyState !== WebSocket.CLOSED) {
             ws.close();
+          }
         }
 
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            console.log("WebSocket connection successfully established");
-            reconnectAttempts = 0;
-            currentReconnectDelay = initialReconnectDelay;
-            updateStatus("Connected to server. Waiting for WhatsApp client...");
-            
-            startHeartbeat();
-            startConnectionMonitor();
+          console.log("WebSocket connection successfully established");
+          reconnectAttempts = 0;
+          currentReconnectDelay = initialReconnectDelay;
+          updateStatus("Connected to server. Waiting for WhatsApp client...");
+
+          startHeartbeat();
+          startConnectionMonitor();
         };
 
         ws.onmessage = (event) => {
-            try {
-                const message = JSON.parse(event.data);
-                handleWebSocketMessage(message);
-            } catch (error) {
-                console.error("Error processing WebSocket message:", error);
-            }
+          try {
+            const message = JSON.parse(event.data);
+            handleWebSocketMessage(message);
+          } catch (error) {
+            console.error("Error processing WebSocket message:", error);
+          }
         };
 
         ws.onerror = (error) => {
-            console.error("WebSocket connection error:", error);
-            updateStatus("Connection error. Reconnecting...");
+          console.error("WebSocket connection error:", error);
+          updateStatus("Connection error. Reconnecting...");
         };
 
         ws.onclose = (event) => {
-            console.log("WebSocket connection closed:", event.code, event.reason);
-            cleanupConnection();
-            
-            if (reconnectAttempts < maxReconnectAttempts) {
-                scheduleReconnect();
-            } else {
-                updateStatus("Failed to reconnect. Please refresh the page.");
-            }
+          console.log("WebSocket connection closed:", event.code, event.reason);
+          cleanupConnection();
+
+          if (reconnectAttempts < maxReconnectAttempts) {
+            scheduleReconnect();
+          } else {
+            updateStatus("Failed to reconnect. Please refresh the page.");
+          }
         };
-    }
+      }
 
-    function handleWebSocketMessage(message) {
+      function handleWebSocketMessage(message) {
         switch (message.type) {
-            case "qr":
-                showQRCode(message.qr);
-                break;
-            case "status":
-                updateBotStatus(message.ready);
-                break;
-            case "log":
-                appendToLog(message.message);
-                break;
-            case "memoryUsage":
-                updateMemoryUsage(message.memoryUsage);
-                break;
-            case "uptime":
-                updateUptime(message.uptime);
-                break;
-            case "heartbeat":
-                // Tanggapan heartbeat dari server
-                break;
-            default:
-                console.warn("Unknown message type:", message.type);
+          case "qr":
+            showQRCode(message.qr);
+            break;
+          case "status":
+            updateBotStatus(message.ready);
+            break;
+          case "log":
+            appendToLog(message.message);
+            break;
+          case "memoryUsage":
+            updateMemoryUsage(message.memoryUsage);
+            break;
+          case "uptime":
+            updateUptime(message.uptime);
+            break;
+          case "heartbeat":
+            // Tanggapan heartbeat dari server
+            break;
+          default:
+            console.warn("Unknown message type:", message.type);
         }
-    }
+      }
 
-    function showQRCode(qrData) {
+      function showQRCode(qrData) {
         console.log("QR code received");
         statusElement.style.display = "none";
         qrCodeElement.style.display = "block";
 
         QRCode.toDataURL(qrData, { width: 300, margin: 2 }, (error, url) => {
-            if (error) {
-                console.error("QR code generation error:", error);
-                return;
-            }
-            qrImageElement.src = url;
+          if (error) {
+            console.error("QR code generation error:", error);
+            return;
+          }
+          qrImageElement.src = url;
         });
-    }
+      }
 
-    function updateBotStatus(isReady) {
+      function updateBotStatus(isReady) {
         if (isReady) {
-            console.log("WhatsApp Bot is ready");
-            updateStatus("WhatsApp Bot is ready!");
-            qrCodeElement.style.display = "none";
+          console.log("WhatsApp Bot is ready");
+          updateStatus("WhatsApp Bot is ready!");
+          qrCodeElement.style.display = "none";
         } else {
-            console.log("WhatsApp Bot is not ready");
-            updateStatus("Loading WhatsApp client...");
-            qrCodeElement.style.display = "none";
+          console.log("WhatsApp Bot is not ready");
+          updateStatus("Loading WhatsApp client...");
+          qrCodeElement.style.display = "none";
         }
-    }
+      }
 
-    function appendToLog(message) {
+      function appendToLog(message) {
         logElement.textContent += message + "\n";
         logElement.scrollTop = logElement.scrollHeight;
-    }
+      }
 
-    function updateMemoryUsage(memoryUsage) {
+      function updateMemoryUsage(memoryUsage) {
         const memoryInfo = `MEMORY USAGE\n\nRSS: ${memoryUsage.rss} MB\nHeap Total: ${memoryUsage.heapTotal} MB\nHeap Used: ${memoryUsage.heapUsed} MB\nExternal: ${memoryUsage.external} MB\nChromium: ${memoryUsage.chromiumMemory} MB\nTotal: ${memoryUsage.totalMemory} MB`;
         memoryUsageElement.innerHTML = `<pre>${memoryInfo}</pre>`;
-    }
+      }
 
-    function updateUptime(uptime) {
+      function updateUptime(uptime) {
         const { hours, minutes, seconds } = uptime;
         const uptimeInfo = `SERVER UPTIME\n\n${hours} hours\n${minutes} minutes\n${seconds} seconds`;
         uptimeElement.innerHTML = `<pre>${uptimeInfo}</pre>`;
-    }
+      }
 
-    function updateStatus(text) {
+      function updateStatus(text) {
         statusElement.innerText = text;
         statusElement.style.display = "block";
-    }
+      }
 
-    function startHeartbeat() {
+      function startHeartbeat() {
         pingInterval = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                try {
-                    ws.send(JSON.stringify({ 
-                        type: "heartbeat", 
-                        timestamp: Date.now() 
-                    }));
-                } catch (error) {
-                    console.error("Error sending heartbeat:", error);
-                }
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send(
+                JSON.stringify({
+                  type: "heartbeat",
+                  timestamp: Date.now(),
+                })
+              );
+            } catch (error) {
+              console.error("Error sending heartbeat:", error);
             }
+          }
         }, 25000); // Kirim heartbeat setiap 25 detik
-    }
+      }
 
-    function startConnectionMonitor() {
+      function startConnectionMonitor() {
         connectionMonitorInterval = setInterval(() => {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                console.warn("Connection not active, attempting to reconnect...");
-                connectWebSocket();
-            }
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.warn("Connection not active, attempting to reconnect...");
+            connectWebSocket();
+          }
         }, 30000); // Periksa koneksi setiap 30 detik
-    }
+      }
 
-    function cleanupConnection() {
+      function cleanupConnection() {
         if (pingInterval) clearInterval(pingInterval);
         if (connectionMonitorInterval) clearInterval(connectionMonitorInterval);
-    }
+      }
 
-    function scheduleReconnect() {
-        reconnectAttempts++;
-        updateStatus(`Disconnected. Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`);
-        
-        currentReconnectDelay = Math.min(
-            initialReconnectDelay * Math.pow(2, reconnectAttempts - 1),
-            maxReconnectDelay
-        );
-        
-        setTimeout(connectWebSocket, currentReconnectDelay);
-    }
-
-    // Initialize connection when page loads
-    document.addEventListener('DOMContentLoaded', connectWebSocket);
-
-    // Reconnect when tab becomes visible
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            connectWebSocket();
+      function scheduleReconnect() {
+        if (reconnectAttempts >= maxReconnectAttempts) {
+          updateStatus("Failed to reconnect. Please refresh the page.");
+          return;
         }
-    });
 
-    // Untuk debugging
-    window.debugWs = () => ws;
-</script>
-</body>
+        reconnectAttempts++;
+        updateStatus(
+          `Disconnected. Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`
+        );
+
+        // Exponential backoff with jitter
+        currentReconnectDelay = Math.min(
+          initialReconnectDelay * Math.pow(2, reconnectAttempts - 1),
+          maxReconnectDelay
+        );
+
+        // Add jitter (randomness) to prevent thundering herd
+        const jitter = currentReconnectDelay * 0.2 * Math.random();
+        const delayWithJitter = currentReconnectDelay + jitter;
+
+        setTimeout(connectWebSocket, delayWithJitter);
+      }
+
+      // Initialize connection when page loads
+      document.addEventListener("DOMContentLoaded", connectWebSocket);
+
+      // Reconnect when tab becomes visible
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          connectWebSocket();
+        }
+      });
+
+      // Untuk debugging
+      window.debugWs = () => ws;
+    </script>
+  </body>
 </html>
