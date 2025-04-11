@@ -1,7 +1,16 @@
 // handlers/meetingHandler.js
-function handleMeeting(message) {
+function handleMeeting(message, botInfo) {
   const messageBody = message.body;
   const senderName = message._data.notifyName || "Bapak/Ibu";
+  const senderNumber = message.from;
+  const isGroup = senderNumber.includes("@g.us");
+
+  if (
+    senderNumber !== `${botInfo?.botNumber}@c.us` &&
+    senderNumber !== "status@broadcast" &&
+    isGroup !== true
+  )
+    return false;
 
   // Check if message contains meeting keywords
   const isMeetingMessage =

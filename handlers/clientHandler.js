@@ -74,7 +74,7 @@ function setupClientHandlers(client, startTime, wss) {
 
       // Jika bukan greeting, coba handle sebagai meeting
       if (!isGreeting) {
-        handleMeeting(message, wss);
+        handleMeeting(message, botInfo);
       }
     }
   });
