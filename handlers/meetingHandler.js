@@ -12,19 +12,16 @@ const unlink = fs.promises.unlink;
 const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
-  const worker = await createWorker({
-    corePath: require.resolve("tesseract.js-core/tesseract-core.wasm.js"),
-    workerPath: require.resolve("tesseract.js/dist/worker.min.js"),
-    langPath: "https://tessdata.projectnaptha.com/4.0.0",
-  });
+  console.log(`Processing image: ${imagePath}`);
+  let worker; // Use let instead of const for reassignment
 
   try {
     worker = await createWorker({
       logger: (m) => console.log(m.status),
       errorHandler: (err) => console.error("Worker error:", err),
-      corePath: require.resolve("tesseract.js-core/tesseract-core.wasm.js"), // Explicit core path
+      corePath: require.resolve("tesseract.js-core/tesseract-core.wasm.js"),
       workerPath: require.resolve("tesseract.js/dist/worker.min.js"),
-      langPath: "https://tessdata.projectnaptha.com/4.0.0", // Remote language data
+      langPath: "https://tessdata.projectnaptha.com/4.0.0",
     });
 
     await worker.loadLanguage("eng");
