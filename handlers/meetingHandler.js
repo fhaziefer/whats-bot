@@ -12,31 +12,37 @@ const unlink = fs.promises.unlink;
 const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
-  console.log(`Processing image: ${imagePath}`);
-  let worker; // Declare worker outside try block for finally access
+  const worker = await createWorker({
+    corePath: require.resolve("tesseract.js-core/tesseract-core.wasm.js"),
+    workerPath: require.resolve("tesseract.js/dist/worker.min.js"),
+    langPath: "https://tessdata.projectnaptha.com/4.0.0",
+  });
 
   try {
     worker = await createWorker({
-      logger: m => console.log(m.status),
-      errorHandler: err => console.error('Worker error:', err),
-      corePath: require.resolve('tesseract.js-core/tesseract-core.wasm.js'), // Explicit core path
-      workerPath: require.resolve('tesseract.js/dist/worker.min.js'),
-      langPath: 'https://tessdata.projectnaptha.com/4.0.0' // Remote language data
+      logger: (m) => console.log(m.status),
+      errorHandler: (err) => console.error("Worker error:", err),
+      corePath: require.resolve("tesseract.js-core/tesseract-core.wasm.js"), // Explicit core path
+      workerPath: require.resolve("tesseract.js/dist/worker.min.js"),
+      langPath: "https://tessdata.projectnaptha.com/4.0.0", // Remote language data
     });
 
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    
-    const { data: { text } } = await worker.recognize(imagePath);
+    await worker.loadLanguage("eng");
+    await worker.initialize("eng");
+
+    const {
+      data: { text },
+    } = await worker.recognize(imagePath);
     console.log(`Extracted ${text.length} characters`);
     return text;
   } catch (error) {
-    console.error('OCR Processing Error:', error);
-    return '';
+    console.error("OCR Processing Error:", error);
+    return "";
   } finally {
     if (worker) {
-      await worker.terminate()
-        .catch(e => console.error('Termination error:', e));
+      await worker
+        .terminate()
+        .catch((e) => console.error("Termination error:", e));
     }
   }
 }
