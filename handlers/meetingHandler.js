@@ -12,20 +12,13 @@ const unlink = fs.promises.unlink;
 const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
-  console.log(`Memproses gambar: ${path.basename(imagePath)}`);
-
-  const worker = await createWorker({
-    logger: (m) => console.log(m.status), // Logger sederhana
-    cacheMethod: "none",
-    lang: "ind+eng",
-  });
-
+  console.log(`Processing image: ${path.basename(imagePath)}`);
+  
+  const worker = await createWorker('ind+eng'); // Langsung specify bahasa
+  
   try {
-    await worker.load();
-    await worker.initialize("ind+eng");
-    const {
-      data: { text },
-    } = await worker.recognize(imagePath);
+    const { data: { text } } = await worker.recognize(imagePath);
+    console.log(`Extracted ${text.length} characters`);
     return text;
   } finally {
     await worker.terminate();
