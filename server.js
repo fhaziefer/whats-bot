@@ -71,8 +71,8 @@ const client = new Client({
     dataPath: "localAuthSession"
   }),
   puppeteer: {
-    // headless: true,
-    headless: false,
+    headless: true,
+    // headless: false,
     executablePath: '/usr/bin/chromium-browser',
     args: [
       "--no-sandbox",

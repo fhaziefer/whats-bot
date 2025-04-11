@@ -31,7 +31,7 @@ async function initializeClient(client) {
     // Coba restart setelah delay
     setTimeout(() => {
       console.log('Attempting to reinitialize client...');
-      initializeClient();
+      initializeClient(client);
     }, 5000);
   }
 }
