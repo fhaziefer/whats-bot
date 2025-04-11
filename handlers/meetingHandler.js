@@ -6,9 +6,9 @@ function handleMeeting(message, botInfo) {
   const isGroup = senderNumber.includes("@g.us");
 
   if (
-    senderNumber !== `${botInfo?.botNumber}@c.us` &&
-    senderNumber !== "status@broadcast" &&
-    isGroup !== true
+    senderNumber === `${botInfo?.botNumber}@c.us` &&
+    senderNumber === "status@broadcast" &&
+    isGroup === true
   )
     return false;
 
