@@ -5,12 +5,14 @@ function handleMeeting(message, botInfo) {
   const senderNumber = message.from;
   const isGroup = senderNumber.includes("@g.us");
 
+  // Perbaikan kondisi untuk mencegah bot membalas pesannya sendiri
   if (
-    senderNumber === `${botInfo?.botNumber}@c.us` &&
-    senderNumber === "status@broadcast" &&
-    isGroup === true
-  )
+    senderNumber === `${botInfo?.botNumber}@c.us` || 
+    senderNumber === "status@broadcast" ||
+    isGroup
+  ) {
     return false;
+  }
 
   // Check if message contains meeting keywords
   const isMeetingMessage =
@@ -60,8 +62,7 @@ function handleMeeting(message, botInfo) {
     message.reply(
       `Wa'alaikumussalam Wr. Wb.\n\n` +
         `Matur nuwun sanget kagem undanganipun.\n` +
-        `Njeh, insyaAllah dalem usahaaken saget hadir dateng acaraipun.\n\n` +
-        `Wassalamu'alaikum Wr. Wb.`
+        `Njeh, insyaAllah dalem usahaaken saget hadir dateng acaraipun.`
     );
     return false;
   }

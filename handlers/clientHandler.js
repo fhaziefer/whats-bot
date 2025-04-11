@@ -56,8 +56,8 @@ function setupClientHandlers(client, startTime, wss) {
     const messageBody = message.body;
 
     if (
-      senderNumber !== `${botInfo?.botNumber}@c.us` &&
-      senderNumber !== "status@broadcast" &&
+      senderNumber !== `${botInfo?.botNumber}@c.us` ||
+      senderNumber !== "status@broadcast" ||
       isGroup !== true
     ) {
       console.log(
