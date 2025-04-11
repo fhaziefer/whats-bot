@@ -1,3 +1,3 @@
-2025/04/11-12:00:56.340 185bb Reusing MANIFEST /root/whats-bot/localAuthSession/session/Default/shared_proto_db/metadata/MANIFEST-000001
-2025/04/11-12:00:56.340 185bb Recovering log #3
-2025/04/11-12:00:56.341 185bb Reusing old log /root/whats-bot/localAuthSession/session/Default/shared_proto_db/metadata/000003.log 
+2025/04/11-13:48:42.362 1e5d4 Reusing MANIFEST /root/whats-bot/localAuthSession/session/Default/shared_proto_db/metadata/MANIFEST-000001
+2025/04/11-13:48:42.362 1e5d4 Recovering log #3
+2025/04/11-13:48:42.362 1e5d4 Reusing old log /root/whats-bot/localAuthSession/session/Default/shared_proto_db/metadata/000003.log 

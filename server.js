@@ -16,32 +16,40 @@ const wss = new WebSocket.Server({
   clientTracking: true
 });
 
-// Ping semua client setiap 25 detik
+// Ping clients setiap 25 detik
 const interval = setInterval(() => {
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
-      client.ping('heartbeat', false, (err) => {
-        if (err) console.error('Ping error:', err);
-      });
+      if (!client.isAlive) {
+        client.terminate();
+        return;
+      }
+      client.isAlive = false;
+      client.ping(() => {});
     }
   });
 }, 25000);
 
-wss.on('connection', (ws) => {
-    console.log('New WebSocket connection');
-    
-    ws.on('close', (code, reason) => {
-        console.log(`WebSocket closed with code ${code}, reason: ${reason}`);
-    });
-    
-    ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-    });
-});
-
-// Handle close
 wss.on('close', () => {
   clearInterval(interval);
+});
+
+wss.on('connection', (ws, request) => {
+  console.log('New WebSocket connection');
+  
+  ws.isAlive = true;
+  
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
+
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+  });
 });
 
 // Catat waktu mulai server
@@ -107,11 +115,11 @@ setInterval(() => {
   });
 }, 5000); // Kirim setiap 5 detik
 
-server.on('upgrade', (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, request);
-  });
-});
+// server.on('upgrade', (request, socket, head) => {
+//   wss.handleUpgrade(request, socket, head, (ws) => {
+//     wss.emit('connection', ws, request);
+//   });
+// });
 
 wss.on('error', (error) => {
     console.error('WebSocket Server Error:', error);
@@ -123,14 +131,14 @@ server.on('error', (error) => {
 });
 
 // Tambahkan handler untuk uncaught exceptions
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // Jangan exit process kecuali benar-benar diperlukan
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
-
 // Start server
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server is running on port ${PORT} | 3100`);

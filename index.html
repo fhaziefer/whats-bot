@@ -122,17 +122,17 @@
     <script>
       let ws;
       let reconnectAttempts = 0;
-      const maxReconnectAttempts = 10;
+      const maxReconnectAttempts = 15; // Diperbanyak dari 10 ke 15
       const initialReconnectDelay = 1000;
-      const maxReconnectDelay = 30000;
+      const maxReconnectDelay = 60000; // Diperpanjang dari 30s ke 60s
       let currentReconnectDelay = initialReconnectDelay;
       let pingInterval;
-      let connectionMonitorInterval;
+      let lastActivityTime = Date.now();
 
-      // Gunakan path /ws untuk WebSocket endpoint
+      // Deteksi environment untuk URL WebSocket
       const wsProtocol =
         window.location.protocol === "https:" ? "wss://" : "ws://";
-      const wsUrl = `${wsProtocol}${window.location.host}/ws`; // Perhatikan /ws di akhir
+      const wsUrl = `${wsProtocol}${window.location.host}/ws`;
 
       // Cache DOM elements
       const statusElement = document.getElementById("status");
@@ -145,7 +145,7 @@
       function connectWebSocket() {
         console.log(`Attempting to connect to WebSocket at ${wsUrl}`);
 
-        // Tutup koneksi sebelumnya jika ada
+        // Clean up previous connection
         if (ws) {
           ws.onopen = null;
           ws.onmessage = null;
@@ -157,20 +157,26 @@
         }
 
         ws = new WebSocket(wsUrl);
+        const connectTime = Date.now();
 
         ws.onopen = () => {
-          console.log("WebSocket connection successfully established");
+          const duration = (Date.now() - connectTime) / 1000;
+          console.log(`WebSocket connected in ${duration.toFixed(2)}s`);
           reconnectAttempts = 0;
           currentReconnectDelay = initialReconnectDelay;
           updateStatus("Connected to server. Waiting for WhatsApp client...");
-
+          lastActivityTime = Date.now();
           startHeartbeat();
-          startConnectionMonitor();
         };
 
         ws.onmessage = (event) => {
+          lastActivityTime = Date.now();
           try {
             const message = JSON.parse(event.data);
+            if (message.type === "pong") {
+              console.debug("Pong received", message.timestamp);
+              return;
+            }
             handleWebSocketMessage(message);
           } catch (error) {
             console.error("Error processing WebSocket message:", error);
@@ -183,13 +189,15 @@
         };
 
         ws.onclose = (event) => {
-          console.log("WebSocket connection closed:", event.code, event.reason);
-          cleanupConnection();
+          console.log(
+            `WebSocket connection closed: Code ${event.code}, Reason: ${
+              event.reason || "none"
+            }`
+          );
 
-          if (reconnectAttempts < maxReconnectAttempts) {
+          // Skip normal closures (1000) and going away (1001)
+          if (event.code !== 1000 && event.code !== 1001) {
             scheduleReconnect();
-          } else {
-            updateStatus("Failed to reconnect. Please refresh the page.");
           }
         };
       }
@@ -219,6 +227,7 @@
         }
       }
 
+      // Untuk menangani tampilan QR Code
       function showQRCode(qrData) {
         console.log("QR code received");
         statusElement.style.display = "none";
@@ -227,17 +236,31 @@
         QRCode.toDataURL(qrData, { width: 300, margin: 2 }, (error, url) => {
           if (error) {
             console.error("QR code generation error:", error);
+            statusElement.style.display = "block";
+            updateStatus("Error generating QR code. Please refresh the page.");
             return;
           }
           qrImageElement.src = url;
+          qrImageElement.onload = () => {
+            console.log("QR code image loaded");
+          };
+          qrImageElement.onerror = () => {
+            console.error("Failed to load QR code image");
+            statusElement.style.display = "block";
+            updateStatus("Error loading QR code. Please refresh the page.");
+          };
         });
       }
 
+      // Untuk update status bot
       function updateBotStatus(isReady) {
         if (isReady) {
           console.log("WhatsApp Bot is ready");
           updateStatus("WhatsApp Bot is ready!");
           qrCodeElement.style.display = "none";
+          // Reset reconnect attempts when bot is ready
+          reconnectAttempts = 0;
+          currentReconnectDelay = initialReconnectDelay;
         } else {
           console.log("WhatsApp Bot is not ready");
           updateStatus("Loading WhatsApp client...");
@@ -267,20 +290,35 @@
       }
 
       function startHeartbeat() {
+        // Clear existing interval if any
+        if (pingInterval) clearInterval(pingInterval);
+
         pingInterval = setInterval(() => {
+          // Check if connection is stale (no activity for 30s)
+          const timeSinceLastActivity = Date.now() - lastActivityTime;
+          if (timeSinceLastActivity > 30000) {
+            console.warn("No activity for 30s, forcing reconnect");
+            ws.close(4000, "Inactivity timeout");
+            return;
+          }
+
           if (ws && ws.readyState === WebSocket.OPEN) {
             try {
+              const timestamp = Date.now();
               ws.send(
                 JSON.stringify({
                   type: "heartbeat",
-                  timestamp: Date.now(),
+                  timestamp,
                 })
               );
+              console.debug("Heartbeat sent", timestamp);
             } catch (error) {
               console.error("Error sending heartbeat:", error);
+              // Force reconnect on heartbeat failure
+              ws.close(4001, "Heartbeat failed");
             }
           }
-        }, 25000); // Kirim heartbeat setiap 25 detik
+        }, 15000); // Send every 15 seconds
       }
 
       function startConnectionMonitor() {
@@ -293,20 +331,28 @@
       }
 
       function cleanupConnection() {
-        if (pingInterval) clearInterval(pingInterval);
-        if (connectionMonitorInterval) clearInterval(connectionMonitorInterval);
+        if (pingInterval) {
+          clearInterval(pingInterval);
+          pingInterval = null;
+        }
+        if (connectionMonitorInterval) {
+          clearInterval(connectionMonitorInterval);
+          connectionMonitorInterval = null;
+        }
       }
 
       function scheduleReconnect() {
         if (reconnectAttempts >= maxReconnectAttempts) {
-          updateStatus("Failed to reconnect. Please refresh the page.");
+          updateStatus(
+            "Failed to reconnect after multiple attempts. Please refresh the page."
+          );
           return;
         }
 
         reconnectAttempts++;
-        updateStatus(
-          `Disconnected. Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`
-        );
+        const attemptInfo = `Disconnected. Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`;
+        console.log(attemptInfo);
+        updateStatus(attemptInfo);
 
         // Exponential backoff with jitter
         currentReconnectDelay = Math.min(
@@ -314,25 +360,46 @@
           maxReconnectDelay
         );
 
-        // Add jitter (randomness) to prevent thundering herd
-        const jitter = currentReconnectDelay * 0.2 * Math.random();
+        // Add random jitter (10-30% of current delay)
+        const jitterFactor = 0.1 + Math.random() * 0.2;
+        const jitter = currentReconnectDelay * jitterFactor;
         const delayWithJitter = currentReconnectDelay + jitter;
 
+        console.log(
+          `Next reconnect attempt in ${(delayWithJitter / 1000).toFixed(1)}s`
+        );
         setTimeout(connectWebSocket, delayWithJitter);
       }
 
       // Initialize connection when page loads
-      document.addEventListener("DOMContentLoaded", connectWebSocket);
+      document.addEventListener("DOMContentLoaded", () => {
+        connectWebSocket();
 
-      // Reconnect when tab becomes visible
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") {
+        // Add offline/online detection
+        window.addEventListener("offline", () => {
+          updateStatus("Network connection lost. Waiting for connection...");
+          if (ws) ws.close(4002, "Network offline");
+        });
+
+        window.addEventListener("online", () => {
+          updateStatus("Network connection restored. Reconnecting...");
           connectWebSocket();
-        }
+        });
       });
 
+      // Initialize connection when page loads
+      document.addEventListener("DOMContentLoaded", connectWebSocket);
+
       // Untuk debugging
-      window.debugWs = () => ws;
+      window.debugWs = () => {
+        return {
+          ws,
+          reconnectAttempts,
+          currentReconnectDelay,
+          lastActivity: new Date(lastActivityTime),
+          now: new Date(),
+        };
+      };
     </script>
   </body>
 </html>
