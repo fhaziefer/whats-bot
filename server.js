@@ -86,7 +86,7 @@ const client = new Client({
       "--window-size=1920x1080"
     ],
     ignoreHTTPSErrors: true,
-    userDataDir: './chromeCache' // tambahkan direktori cache khusus
+    // userDataDir: './chromeCache' // tambahkan direktori cache khusus
   },
   webVersionCache: {
     type: 'remote',
