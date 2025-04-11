@@ -13,15 +13,21 @@ const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
   console.log(`Processing image: ${imagePath}`);
-  let worker; // Use let instead of const for reassignment
+  let worker;
 
   try {
     worker = await createWorker({
       logger: (m) => console.log(m.status),
-      errorHandler: (err) => console.error("Worker error:", err),
-      corePath: require.resolve("tesseract.js-core/tesseract-core.wasm.js"),
-      workerPath: require.resolve("tesseract.js/dist/worker.min.js"),
-      langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      workerPath: path.join(
+        __dirname,
+        "node_modules",
+        "tesseract.js",
+        "src",
+        "worker",
+        "node",
+        "index.js"
+      ), // Node-specific worker
+      langPath: path.join(__dirname, "node_modules", "tesseract.js-core"), // Local language data
     });
 
     await worker.loadLanguage("eng");
@@ -143,12 +149,9 @@ function createShortReply(details) {
   }
 
   return (
-    `Wa'alaikumussalam Wr. Wb.\n\n` +
+    `Wa'alaikumussalam Wr. Wb.\n` +
     `Matur nuwun sanget kagem undanganipun.\n` +
-    (details.meetingType
-      ? `Njeh, insyaAllah dalem usahaaken saget hadir dateng acara ${details.meetingType}\n\n`
-      : "\n") +
-    `Wassalamu'alaikum Wr. Wb.`
+    `Njeh, InsyaAllah kulo usahaaken hadir.`
   );
 }
 
