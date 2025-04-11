@@ -4,13 +4,6 @@ const path = require("path");
 const moment = require("moment-hijri");
 moment.locale("id");
 
-// Tambahkan di awal fungsi handleMeeting
-const tempDir = "./temp";
-if (!fs.existsSync(tempDir)) {
-  fs.mkdirSync(tempDir);
-  console.log("Folder temp created");
-}
-
 // Fungsi untuk ekstrak teks dari gambar
 async function extractTextFromImage(imagePath) {
   const worker = await createWorker();
@@ -72,6 +65,14 @@ function createShortReply(details) {
 // Fungsi utama untuk menangani undangan
 async function handleMeeting(message, botInfo) {
   // Jangan balas jika pesan dari bot sendiri atau group
+
+  // Tambahkan di awal fungsi handleMeeting
+  const tempDir = "./temp";
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir);
+    console.log("Folder temp created");
+  }
+
   if (
     message.from === `${botInfo?.botNumber}@c.us` ||
     message.from.includes("@g.us")
