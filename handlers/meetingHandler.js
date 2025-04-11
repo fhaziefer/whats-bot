@@ -6,14 +6,27 @@ moment.locale("id");
 
 // Fungsi untuk ekstrak teks dari gambar
 async function extractTextFromImage(imagePath) {
-  const worker = await createWorker();
+  console.log("Memulai OCR untuk:", imagePath);
+  const worker = await createWorker({
+    logger: (progress) => console.log(progress),
+    cachePath: "./tesseract-cache",
+    gzip: false,
+  });
+
   try {
-    await worker.loadLanguage("ind+eng");
+    await worker.load();
     await worker.initialize("ind+eng");
+
+    console.log("Memproses gambar...");
     const {
       data: { text },
     } = await worker.recognize(imagePath);
+    console.log("Teks berhasil diekstrak");
+
     return text;
+  } catch (error) {
+    console.error("Gagal OCR:", error);
+    throw error;
   } finally {
     await worker.terminate();
   }
@@ -65,7 +78,7 @@ function createShortReply(details) {
 // Fungsi utama untuk menangani undangan
 async function handleMeeting(message, botInfo) {
   // Jangan balas jika pesan dari bot sendiri atau group
-
+  console.log(message);
   // Tambahkan di awal fungsi handleMeeting
   const tempDir = "./temp";
   if (!fs.existsSync(tempDir)) {
@@ -86,21 +99,33 @@ async function handleMeeting(message, botInfo) {
   if (message.hasMedia) {
     try {
       const media = await message.downloadMedia();
-      if (media && ["image/jpeg", "image/png"].includes(media.mimetype)) {
-        const tempDir = "./temp";
-        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+      if (!media) {
+        console.log("Media tidak valid");
+        return false;
+      }
 
-        const filename = `undangan_${Date.now()}.${
-          media.mimetype.split("/")[1]
-        }`;
-        const filePath = path.join(tempDir, filename);
+      const tempDir = "./temp";
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+      }
 
-        fs.writeFileSync(filePath, media.data, "base64");
-        text = await extractTextFromImage(filePath);
-        fs.unlinkSync(filePath);
+      const filePath = path.join(
+        tempDir,
+        `undangan_${Date.now()}.${media.mimetype.split("/")[1]}`
+      );
+      fs.writeFileSync(filePath, media.data, "base64");
+
+      console.log("Memulai ekstraksi teks...");
+      const text = await extractTextFromImage(filePath);
+      fs.unlinkSync(filePath);
+
+      if (!text) {
+        console.log("Tidak ada teks yang terdeteksi");
+        return false;
       }
     } catch (error) {
       console.error("Error processing image:", error);
+      return false;
     }
   }
 
