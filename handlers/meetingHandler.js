@@ -4,6 +4,13 @@ const path = require("path");
 const moment = require("moment-hijri");
 moment.locale("id");
 
+// Tambahkan di awal fungsi handleMeeting
+const tempDir = "./temp";
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir);
+  console.log("Folder temp created");
+}
+
 // Fungsi untuk ekstrak teks dari gambar
 async function extractTextFromImage(imagePath) {
   const worker = await createWorker();
