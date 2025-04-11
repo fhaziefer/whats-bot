@@ -13,65 +13,69 @@ const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
   console.log(`Processing image: ${path.basename(imagePath)}`);
-  
-  // Gunakan konfigurasi minimal tanpa logger function
+
+  // Gunakan versi worker yang lebih stabil
   const worker = await createWorker({
-    cacheMethod: 'none',
-    workerPath: require.resolve('tesseract.js/dist/worker.min.js'),
-    lang: 'ind+eng'
+    cachePath: "./tesseract-cache",
+    workerPath: "tesseract.js/src/worker-script/node/index.js", // Path alternatif
+    lang: "ind+eng",
+    gzip: false,
   });
 
   try {
-    const { data: { text } } = await worker.recognize(imagePath);
-    console.log(`Extracted ${text.length} characters`);
+    console.log("Starting OCR process...");
+    const {
+      data: { text },
+    } = await worker.recognize(imagePath);
+    console.log(`Successfully extracted ${text.length} characters`);
     return text;
   } catch (error) {
-    console.error('OCR Error:', error);
+    console.error("OCR Processing Error:", error);
     throw error;
   } finally {
     try {
       await worker.terminate();
     } catch (terminateError) {
-      console.error('Worker termination error:', terminateError);
+      console.error("Worker termination error:", terminateError);
     }
   }
 }
 
 function convertToHijriDate(gregorianDate) {
   try {
-    if (!gregorianDate || typeof gregorianDate !== 'string') {
+    if (!gregorianDate || typeof gregorianDate !== "string") {
       return "tanggal belum ditentukan";
     }
-    
+
     // Clean the date string
     const cleanedDate = gregorianDate
-      .replace(/[^\w\s\d-]/g, '')
-      .replace(/\s+/g, ' ')
+      .replace(/[^\w\s\d-]/g, "")
+      .replace(/\s+/g, " ")
       .trim();
-    
+
     // Try multiple date formats
     const formats = [
       "DD MMMM YYYY",
       "DD-MM-YYYY",
       "D MMMM YYYY",
       "DD/MM/YYYY",
-      "YYYY-MM-DD"
+      "YYYY-MM-DD",
     ];
-    
+
     let mDate;
     for (const format of formats) {
       mDate = moment(cleanedDate, format);
       if (mDate.isValid()) break;
     }
-    
+
     if (!mDate.isValid()) {
       console.warn(`Invalid date format: ${gregorianDate}`);
       return gregorianDate;
     }
-    
+
     const hijriDate = momentHijri(mDate).format("iD iMMMM iYYYY");
     const gregorianFormatted = mDate.format("dddd, DD MMMM YYYY");
-    
+
     return `${gregorianFormatted} (${hijriDate} H)`;
   } catch (error) {
     console.error("Date conversion error:", error);
@@ -80,11 +84,11 @@ function convertToHijriDate(gregorianDate) {
 }
 
 function extractMeetingDetails(text) {
-  if (!text || typeof text !== 'string' || text.length < 10) {
-    throw new Error('Invalid text input');
+  if (!text || typeof text !== "string" || text.length < 10) {
+    throw new Error("Invalid text input");
   }
 
-  const getMatch = (patterns, defaultValue = '') => {
+  const getMatch = (patterns, defaultValue = "") => {
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match && match[1]) return match[1].trim();
@@ -92,100 +96,117 @@ function extractMeetingDetails(text) {
     return defaultValue;
   };
 
-  const rawDate = getMatch([
-    /hari\s*:\s*(.*?)(?:\n|$)/i,
-    /tanggal\s*:\s*(.*?)(?:\n|$)/i,
-    /dilaksanakan\s*pada\s*(.*?)(?=\s*(?:wekdalipun|waktu|tempat))/i
-  ], "");
+  const rawDate = getMatch(
+    [
+      /hari\s*:\s*(.*?)(?:\n|$)/i,
+      /tanggal\s*:\s*(.*?)(?:\n|$)/i,
+      /dilaksanakan\s*pada\s*(.*?)(?=\s*(?:wekdalipun|waktu|tempat))/i,
+    ],
+    ""
+  );
 
   return {
-    meetingType: getMatch([
-      /undangan\s*(.*?)(?=\s*(?:hari|tanggal|wekdalipun|dilaksanakan))/i,
-      /acara\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i,
-      /rapat\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i
-    ], "acara penting"),
+    meetingType: getMatch(
+      [
+        /undangan\s*(.*?)(?=\s*(?:hari|tanggal|wekdalipun|dilaksanakan))/i,
+        /acara\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i,
+        /rapat\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i,
+      ],
+      "acara penting"
+    ),
     date: rawDate ? convertToHijriDate(rawDate) : "akan ditentukan",
-    time: getMatch([
-      /wekdalipun\s*:\s*(.*?)(?:\n|$)/i,
-      /waktu\s*:\s*(.*?)(?:\n|$)/i,
-      /jam\s*([0-9.:]+)\s*(?=\s*(?:wi?s?|malam|pagi|siang|selesai))/i
-    ], "00.00").replace(/\./g, ":"),
-    location: getMatch([
-      /panggenanipun\s*:\s*(.*?)(?:\n|$)/i,
-      /tempat\s*:\s*(.*?)(?:\n|$)/i,
-      /lokasi\s*:\s*(.*?)(?:\n|$)/i
-    ], "akan ditentukan")
+    time: getMatch(
+      [
+        /wekdalipun\s*:\s*(.*?)(?:\n|$)/i,
+        /waktu\s*:\s*(.*?)(?:\n|$)/i,
+        /jam\s*([0-9.:]+)\s*(?=\s*(?:wi?s?|malam|pagi|siang|selesai))/i,
+      ],
+      "00.00"
+    ).replace(/\./g, ":"),
+    location: getMatch(
+      [
+        /panggenanipun\s*:\s*(.*?)(?:\n|$)/i,
+        /tempat\s*:\s*(.*?)(?:\n|$)/i,
+        /lokasi\s*:\s*(.*?)(?:\n|$)/i,
+      ],
+      "akan ditentukan"
+    ),
   };
 }
 
 function createShortReply(details) {
-  if (!details || typeof details !== 'object') {
+  if (!details || typeof details !== "object") {
     return `Wa'alaikumussalam Wr. Wb.\n\nMatur nuwun sanget kagem undanganipun.\n\nWassalamu'alaikum Wr. Wb.`;
   }
 
-  return `Wa'alaikumussalam Wr. Wb.\n\n` +
+  return (
+    `Wa'alaikumussalam Wr. Wb.\n\n` +
     `Matur nuwun sanget kagem undanganipun.\n` +
-    (details.meetingType ? `Njeh, insyaAllah dalem usahaaken saget hadir dateng acara ${details.meetingType}\n\n` : '\n') +
-    `Wassalamu'alaikum Wr. Wb.`;
+    (details.meetingType
+      ? `Njeh, insyaAllah dalem usahaaken saget hadir dateng acara ${details.meetingType}\n\n`
+      : "\n") +
+    `Wassalamu'alaikum Wr. Wb.`
+  );
 }
 
 async function handleMeeting(message, botInfo) {
   // Skip if from bot itself or group
-  if (!message || !botInfo || 
-      message.from === `${botInfo?.botNumber}@c.us` || 
-      message.from.includes("@g.us")) {
+  if (
+    !message ||
+    !botInfo ||
+    message.from === `${botInfo?.botNumber}@c.us` ||
+    message.from.includes("@g.us")
+  ) {
     return false;
   }
 
   let text = message.body || "";
   let isImage = false;
 
-  // Process image if exists
+  // Proses gambar
   if (message.hasMedia) {
     try {
       const media = await message.downloadMedia();
-      if (media && media.mimetype.startsWith('image/')) {
+      if (media?.mimetype?.startsWith('image/')) {
         const tempDir = "./temp";
         try {
-          await mkdir(tempDir, { recursive: true });
-        } catch (mkdirError) {
-          if (mkdirError.code !== 'EEXIST') throw mkdirError;
+          await fs.mkdir(tempDir, { recursive: true });
+        } catch (err) {
+          if (err.code !== 'EEXIST') throw err;
         }
 
-        const fileExt = media.mimetype.split('/')[1] || 'jpg';
-        const filePath = path.join(tempDir, `invite_${Date.now()}.${fileExt}`);
+        const ext = media.mimetype.split('/')[1] || 'jpg';
+        const filePath = path.join(tempDir, `invite_${Date.now()}.${ext}`);
         
-        await writeFile(filePath, media.data, "base64");
+        await fs.writeFile(filePath, media.data, "base64");
         text = await extractTextFromImage(filePath);
-        await unlink(filePath);
+        await fs.unlink(filePath);
         isImage = true;
 
         if (!text || text.trim().length < 20) {
-          console.log('No valid text extracted from image');
+          console.log('Insufficient text extracted');
           return false;
         }
       }
     } catch (error) {
-      console.error('Image processing error:', error);
+      console.error('Media Processing Error:', error);
       return false;
     }
   }
 
-  // Check if it's an invitation
-  if (!/(undangan|rapat|wekdalipun|panggenanipun)/i.test(text)) {
-    return false;
-  }
-
+  // Proses undangan
   try {
-    const details = extractMeetingDetails(text);
-    console.log('Extracted details:', JSON.stringify(details, null, 2));
+    if (!/(undangan|rapat|wekdalipun|panggenanipun)/i.test(text)) return false;
     
-    await new Promise(resolve => setTimeout(resolve, 15000)); // 15s delay
+    const details = extractMeetingDetails(text);
+    console.log('Meeting details extracted:', details);
+    
+    await new Promise(resolve => setTimeout(resolve, 15000));
     await message.reply(createShortReply(details));
+    
     return true;
   } catch (error) {
-    console.error('Error processing invitation:', error);
-    // Fallback reply
+    console.error('Invitation Processing Error:', error);
     await new Promise(resolve => setTimeout(resolve, 15000));
     await message.reply(
       `Wa'alaikumussalam Wr. Wb.\n\n` +
