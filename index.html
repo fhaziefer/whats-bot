@@ -113,92 +113,199 @@
     </div>
   </div>
 
-  <script>
+<script>
     let ws;
-    const serverPort = window.location.port || (window.location.protocol === 'https:' ? 443 : 80);
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+    const initialReconnectDelay = 1000;
+    const maxReconnectDelay = 30000;
+    let currentReconnectDelay = initialReconnectDelay;
+    let pingInterval;
+    let connectionMonitorInterval;
+
+    // Gunakan path /ws untuk WebSocket endpoint
     const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const wsUrl = `${wsProtocol}${window.location.hostname}:${serverPort}`;
+    const wsUrl = `${wsProtocol}${window.location.host}/ws`;  // Perhatikan /ws di akhir
+
+    // Cache DOM elements
+    const statusElement = document.getElementById("status");
+    const qrCodeElement = document.getElementById("qr-code");
+    const qrImageElement = document.getElementById("qr-image");
+    const logElement = document.getElementById("log");
+    const memoryUsageElement = document.getElementById("memory-usage");
+    const uptimeElement = document.getElementById("uptime");
 
     function connectWebSocket() {
-      console.log(`Connecting to WebSocket at ${wsUrl}`);
-      
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        console.log("Connected to WebSocket server");
-        document.getElementById("status").innerText = "Connected to server. Waiting for WhatsApp client...";
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-
-          if (message.type === "qr") {
-            console.log("QR code received");
-            document.getElementById("status").style.display = "none";
-            document.getElementById("qr-code").style.display = "block";
-
-            QRCode.toDataURL(
-              message.qr,
-              { width: 300, margin: 2 },
-              (error, url) => {
-                if (error) {
-                  console.error("Error generating QR code:", error);
-                  return;
-                }
-                document.getElementById("qr-image").src = url;
-              }
-            );
-          } else if (message.type === "status") {
-            if (message.ready) {
-              console.log("WhatsApp Bot is ready");
-              document.getElementById("status").innerText = "WhatsApp Bot is ready!";
-              document.getElementById("status").style.display = "block";
-              document.getElementById("qr-code").style.display = "none";
-            } else {
-              console.log("WhatsApp Bot is not ready");
-              document.getElementById("status").innerText = "Loading WhatsApp client...";
-              document.getElementById("status").style.display = "block";
-              document.getElementById("qr-code").style.display = "none";
-            }
-          } else if (message.type === "log") {
-            const logElement = document.getElementById("log");
-            logElement.textContent += message.message + "\n";
-            logElement.scrollTop = logElement.scrollHeight;
-          } else if (message.type === "memoryUsage") {
-            const memoryUsage = message.memoryUsage;
-            const memoryInfo = `MEMORY USAGE\n\nRSS: ${memoryUsage.rss} MB\nHeap Total: ${memoryUsage.heapTotal} MB\nHeap Used: ${memoryUsage.heapUsed} MB\nExternal: ${memoryUsage.external} MB\nChromium: ${memoryUsage.chromiumMemory} MB\nTotal: ${memoryUsage.totalMemory} MB`;
-            document.getElementById("memory-usage").innerHTML = `<pre>${memoryInfo}</pre>`;
-          } else if (message.type === "uptime") {
-            const { hours, minutes, seconds } = message.uptime;
-            const uptimeInfo = `SERVER UPTIME\n\n${hours} hours\n${minutes} minutes\n${seconds} seconds`;
-            document.getElementById("uptime").innerHTML = `<pre>${uptimeInfo}</pre>`;
-          }
-        } catch (error) {
-          console.error("Error processing WebSocket message:", error);
+        console.log(`Attempting to connect to WebSocket at ${wsUrl}`);
+        
+        // Tutup koneksi sebelumnya jika ada
+        if (ws && ws.readyState !== WebSocket.CLOSED) {
+            ws.close();
         }
-      };
 
-      ws.onerror = (error) => {
-        console.error("WebSocket Error:", error);
-        document.getElementById("status").innerText = "Connection error. Retrying...";
-      };
+        ws = new WebSocket(wsUrl);
 
-      ws.onclose = () => {
-        console.log("Disconnected from server");
-        document.getElementById("status").innerText = "Disconnected. Reconnecting...";
-        document.getElementById("status").style.display = "block";
-        document.getElementById("qr-code").style.display = "none";
+        ws.onopen = () => {
+            console.log("WebSocket connection successfully established");
+            reconnectAttempts = 0;
+            currentReconnectDelay = initialReconnectDelay;
+            updateStatus("Connected to server. Waiting for WhatsApp client...");
+            
+            startHeartbeat();
+            startConnectionMonitor();
+        };
 
-        // Coba reconnect setelah 3 detik
-        setTimeout(() => {
-          connectWebSocket();
-        }, 3000);
-      };
+        ws.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                handleWebSocketMessage(message);
+            } catch (error) {
+                console.error("Error processing WebSocket message:", error);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error("WebSocket connection error:", error);
+            updateStatus("Connection error. Reconnecting...");
+        };
+
+        ws.onclose = (event) => {
+            console.log("WebSocket connection closed:", event.code, event.reason);
+            cleanupConnection();
+            
+            if (reconnectAttempts < maxReconnectAttempts) {
+                scheduleReconnect();
+            } else {
+                updateStatus("Failed to reconnect. Please refresh the page.");
+            }
+        };
     }
 
-    // Mulai koneksi WebSocket
-    connectWebSocket();
-  </script>
+    function handleWebSocketMessage(message) {
+        switch (message.type) {
+            case "qr":
+                showQRCode(message.qr);
+                break;
+            case "status":
+                updateBotStatus(message.ready);
+                break;
+            case "log":
+                appendToLog(message.message);
+                break;
+            case "memoryUsage":
+                updateMemoryUsage(message.memoryUsage);
+                break;
+            case "uptime":
+                updateUptime(message.uptime);
+                break;
+            case "heartbeat":
+                // Tanggapan heartbeat dari server
+                break;
+            default:
+                console.warn("Unknown message type:", message.type);
+        }
+    }
+
+    function showQRCode(qrData) {
+        console.log("QR code received");
+        statusElement.style.display = "none";
+        qrCodeElement.style.display = "block";
+
+        QRCode.toDataURL(qrData, { width: 300, margin: 2 }, (error, url) => {
+            if (error) {
+                console.error("QR code generation error:", error);
+                return;
+            }
+            qrImageElement.src = url;
+        });
+    }
+
+    function updateBotStatus(isReady) {
+        if (isReady) {
+            console.log("WhatsApp Bot is ready");
+            updateStatus("WhatsApp Bot is ready!");
+            qrCodeElement.style.display = "none";
+        } else {
+            console.log("WhatsApp Bot is not ready");
+            updateStatus("Loading WhatsApp client...");
+            qrCodeElement.style.display = "none";
+        }
+    }
+
+    function appendToLog(message) {
+        logElement.textContent += message + "\n";
+        logElement.scrollTop = logElement.scrollHeight;
+    }
+
+    function updateMemoryUsage(memoryUsage) {
+        const memoryInfo = `MEMORY USAGE\n\nRSS: ${memoryUsage.rss} MB\nHeap Total: ${memoryUsage.heapTotal} MB\nHeap Used: ${memoryUsage.heapUsed} MB\nExternal: ${memoryUsage.external} MB\nChromium: ${memoryUsage.chromiumMemory} MB\nTotal: ${memoryUsage.totalMemory} MB`;
+        memoryUsageElement.innerHTML = `<pre>${memoryInfo}</pre>`;
+    }
+
+    function updateUptime(uptime) {
+        const { hours, minutes, seconds } = uptime;
+        const uptimeInfo = `SERVER UPTIME\n\n${hours} hours\n${minutes} minutes\n${seconds} seconds`;
+        uptimeElement.innerHTML = `<pre>${uptimeInfo}</pre>`;
+    }
+
+    function updateStatus(text) {
+        statusElement.innerText = text;
+        statusElement.style.display = "block";
+    }
+
+    function startHeartbeat() {
+        pingInterval = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(JSON.stringify({ 
+                        type: "heartbeat", 
+                        timestamp: Date.now() 
+                    }));
+                } catch (error) {
+                    console.error("Error sending heartbeat:", error);
+                }
+            }
+        }, 25000); // Kirim heartbeat setiap 25 detik
+    }
+
+    function startConnectionMonitor() {
+        connectionMonitorInterval = setInterval(() => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.warn("Connection not active, attempting to reconnect...");
+                connectWebSocket();
+            }
+        }, 30000); // Periksa koneksi setiap 30 detik
+    }
+
+    function cleanupConnection() {
+        if (pingInterval) clearInterval(pingInterval);
+        if (connectionMonitorInterval) clearInterval(connectionMonitorInterval);
+    }
+
+    function scheduleReconnect() {
+        reconnectAttempts++;
+        updateStatus(`Disconnected. Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`);
+        
+        currentReconnectDelay = Math.min(
+            initialReconnectDelay * Math.pow(2, reconnectAttempts - 1),
+            maxReconnectDelay
+        );
+        
+        setTimeout(connectWebSocket, currentReconnectDelay);
+    }
+
+    // Initialize connection when page loads
+    document.addEventListener('DOMContentLoaded', connectWebSocket);
+
+    // Reconnect when tab becomes visible
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            connectWebSocket();
+        }
+    });
+
+    // Untuk debugging
+    window.debugWs = () => ws;
+</script>
 </body>
 </html>
