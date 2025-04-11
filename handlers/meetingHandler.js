@@ -42,14 +42,22 @@ async function extractTextFromImage(imagePath) {
   }
 }
 
-function convertToHijriDate(gregorianDate) {
+function convertToHijriDate(rawDate) {
   try {
-    if (!gregorianDate || typeof gregorianDate !== "string") {
+    if (!rawDate || typeof rawDate !== "string") {
       return "tanggal belum ditentukan";
     }
 
+    // Jika sudah dalam format Hijriah/Masehi
+    const hijriMatch = rawDate.match(
+      /(\d+\s\w+\s\d+\sH)\s*\/\s*(\d+\s\w+\s\d+\sM)/i
+    );
+    if (hijriMatch) {
+      return `${hijriMatch[1]}/${hijriMatch[2]}`;
+    }
+
     // Clean the date string
-    const cleanedDate = gregorianDate
+    const cleanedDate = rawDate
       .replace(/[^\w\s\d-]/g, "")
       .replace(/\s+/g, " ")
       .trim();
@@ -70,8 +78,8 @@ function convertToHijriDate(gregorianDate) {
     }
 
     if (!mDate.isValid()) {
-      console.warn(`Invalid date format: ${gregorianDate}`);
-      return gregorianDate;
+      console.warn(`Invalid date format: ${rawDate}`);
+      return rawDate;
     }
 
     const hijriDate = momentHijri(mDate).format("iD iMMMM iYYYY");
@@ -80,7 +88,7 @@ function convertToHijriDate(gregorianDate) {
     return `${gregorianFormatted} (${hijriDate} H)`;
   } catch (error) {
     console.error("Date conversion error:", error);
-    return gregorianDate;
+    return rawDate;
   }
 }
 
@@ -99,37 +107,37 @@ function extractMeetingDetails(text) {
 
   const rawDate = getMatch(
     [
-      /hari\s*:\s*(.*?)(?:\n|$)/i,
+      /tanggal\s*:\s*(.*?)\s*\/\s*(.*?)(?:\n|$)/i,
       /tanggal\s*:\s*(.*?)(?:\n|$)/i,
-      /dilaksanakan\s*pada\s*(.*?)(?=\s*(?:wekdalipun|waktu|tempat))/i,
+      /dilaksanakan\s*pada\s*(.*?)(?=\s*(?:waktu|tempat))/i,
     ],
     ""
+  );
+
+  const rawTime = getMatch(
+    [
+      /waktu\s*:\s*(\d{1,2}\.\d{2}\s*Wis\.\s*Malam)(?:\n|$)/i,
+      /waktu\s*:\s*(\d{1,2}:\d{2}\s*Wis\.\s*Malam)(?:\n|$)/i,
+      /waktu\s*:\s*(.*?)(?:\n|$)/i,
+    ],
+    "00:00"
   );
 
   return {
     meetingType: getMatch(
       [
-        /undangan\s*(.*?)(?=\s*(?:hari|tanggal|wekdalipun|dilaksanakan))/i,
+        /undangan\s*(rapat\s*harian\s*\d+.*?)(?=\s*(?:hari|tanggal|waktu|dilaksanakan))/i,
         /acara\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i,
         /rapat\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i,
       ],
-      "acara penting"
-    ),
+      "Rapat Harian"
+    )
+      .replace(/\s+/g, " ")
+      .trim(),
     date: rawDate ? convertToHijriDate(rawDate) : "akan ditentukan",
-    time: getMatch(
-      [
-        /wekdalipun\s*:\s*(.*?)(?:\n|$)/i,
-        /waktu\s*:\s*(.*?)(?:\n|$)/i,
-        /jam\s*([0-9.:]+)\s*(?=\s*(?:wi?s?|malam|pagi|siang|selesai))/i,
-      ],
-      "00.00"
-    ).replace(/\./g, ":"),
+    time: rawTime.replace(/\./g, ":"),
     location: getMatch(
-      [
-        /panggenanipun\s*:\s*(.*?)(?:\n|$)/i,
-        /tempat\s*:\s*(.*?)(?:\n|$)/i,
-        /lokasi\s*:\s*(.*?)(?:\n|$)/i,
-      ],
+      [/tempat\s*:\s*(.*?)(?:\n|$)/i, /lokasi\s*:\s*(.*?)(?:\n|$)/i],
       "akan ditentukan"
     ),
   };
@@ -137,12 +145,15 @@ function extractMeetingDetails(text) {
 
 function createShortReply(details) {
   if (!details || typeof details !== "object") {
-    return `Wa'alaikumussalam Wr. Wb.\n\nMatur nuwun sanget kagem undanganipun.\n\nWassalamu'alaikum Wr. Wb.`;
+    return `Wa'alaikumussalam Wr. Wb.\n\nMatur nuwun sanget kagem undanganipun, insyaAllah kulo usahaaken hadir.`;
   }
 
   return (
     `Wa'alaikumussalam Wr. Wb.\n` +
-    `Matur nuwun sanget kagem undanganipun.\n` +
+    `Matur nuwun sanget kagem undangan ${details.meetingType}.\n` +
+    `Tanggal: ${details.date}\n` +
+    `Waktu: ${details.time}\n` +
+    `Tempat: ${details.location}\n\n` +
     `Njeh, InsyaAllah kulo usahaaken hadir.`
   );
 }
