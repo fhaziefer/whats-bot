@@ -16,6 +16,7 @@ async function extractTextFromImage(imagePath) {
     corePath: "node_modules/tesseract.js/dist/tesseract-core.wasm.js",
     workerPath: "node_modules/tesseract.js/dist/worker.min.js",
     langPath: "node_modules/tesseract.js-core/tessdata", // Path lokal
+    logger: (m) => console.log(m.status),
   });
   try {
     await worker.loadLanguage("eng");
