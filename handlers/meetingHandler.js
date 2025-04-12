@@ -16,12 +16,15 @@ async function extractTextFromImage(imagePath) {
   let worker;
 
   try {
-    worker = await createWorker(); // Tanpa konfigurasi logger
-    
-    await worker.loadLanguage("eng");
+    worker = await createWorker();
+
+    // Gunakan API yang benar untuk v4+
+    await worker.load();
     await worker.initialize("eng");
 
-    const { data: { text } } = await worker.recognize(imagePath);
+    const {
+      data: { text },
+    } = await worker.recognize(imagePath);
     console.log("Extracted text:", text);
     return text;
   } catch (error) {
@@ -29,7 +32,9 @@ async function extractTextFromImage(imagePath) {
     return "";
   } finally {
     if (worker) {
-      await worker.terminate().catch(e => console.error("Termination error:", e));
+      await worker
+        .terminate()
+        .catch((e) => console.error("Termination error:", e));
     }
   }
 }
