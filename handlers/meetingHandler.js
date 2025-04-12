@@ -48,81 +48,101 @@ function extractMeetingDetails(text) {
     throw new Error("Invalid text input");
   }
 
-  // Clean the text - more aggressive cleaning
+  // Clean the text
   text = text
     .replace(/[‘’'`~©+]/g, " ")
     .replace(/\s+/g, " ")
     .replace(/\n/g, " ")
     .trim();
 
-  const getMatch = (patterns, defaultValue = "") => {
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        return match[1]
-          .trim()
-          .replace(/\s{2,}/g, " ")
-          .replace(/[^a-zA-Z0-9\s\/\-:.,()]/g, "");
+  // 1. Extract date - very specific pattern for Lirboyo format
+  const dateMatch = text.match(
+    /Tanggal\s*:\s*(\d+\s+\w+\s+\d+\s+H\.?\/\s*(\d+\s+\w+\s+\d+\s+M))/i
+  );
+  let gregorianDate = "tanggal belum ditentukan";
+  let dayOfWeek = "";
+
+  if (dateMatch && dateMatch[2]) {
+    // Get the Gregorian date part
+    gregorianDate = dateMatch[2].replace(/\s*M/i, "").trim();
+
+    // Convert to Date object to get day name
+    try {
+      const dateParts = gregorianDate.split(/\s+/);
+      if (dateParts.length === 3) {
+        const months = {
+          Januari: "January",
+          Februari: "February",
+          Maret: "March",
+          April: "April",
+          Mei: "May",
+          Juni: "June",
+          Juli: "July",
+          Agustus: "August",
+          September: "September",
+          Oktober: "October",
+          November: "November",
+          Desember: "December",
+        };
+
+        const day = dateParts[0];
+        const month = months[dateParts[1]] || dateParts[1];
+        const year = dateParts[2];
+
+        const dateObj = new Date(`${month} ${day}, ${year}`);
+        if (!isNaN(dateObj)) {
+          const days = [
+            "Minggu",
+            "Senin",
+            "Selasa",
+            "Rabu",
+            "Kamis",
+            "Jum'at",
+            "Sabtu",
+          ];
+          dayOfWeek = days[dateObj.getDay()];
+        }
       }
+    } catch (e) {
+      console.error("Error calculating day:", e);
     }
-    return defaultValue;
-  };
+  }
 
-  // 1. Extract meeting type - look for "dalam rangka" pattern
-  const meetingType = getMatch(
-    [
-      /dalam\s+rangka\s+(.*?)(?=\s*(?:yang\s+insya|pada|hari|tanggal|waktu|tempat))/i,
-      /Perihal\s*:\s*UNDANGAN\s*(.*?)(?=\s*(?:kepada|yang|hari|tanggal))/i,
-      /undangan\s*(.*?)(?=\s*(?:hari|tanggal|waktu|tempat))/i,
-    ],
-    "Rapat"
+  // 2. Extract meeting type - look between "dalam rangka" and "yang insya Allah"
+  const meetingTypeMatch = text.match(
+    /dalam\s+rangka\s+(.*?)(?=\s*yang\s+insya\s+Allah)/i
   );
+  const meetingType = meetingTypeMatch ? meetingTypeMatch[1].trim() : "Rapat";
 
-  // 2. Extract day - specific pattern for Lirboyo format
-  const day = getMatch(
-    [
-      /Hari\s*:\s*(.*?)(?=\s*(?:tanggal|waktu|tempat|dilaksanakan|assalam|wassalam))/i,
-      /hari\s*:\s*(.*?)(?=\s*(?:tanggal|waktu|tempat))/i,
-    ],
-    ""
-  ).replace(/jum\s*at/gi, "Jum'at"); // Fix Jumat spelling
-
-  // 3. Extract date - prioritize Gregorian date extraction
-  const rawDate = getMatch(
-    [
-      /Tanggal\s*:\s*(.*?\/\s*\d+\s+\w+\s+\d+\s+M)/i, // Match Hijri/Gregorian format
-      /tanggal\s*:\s*(.*?)(?=\s*(?:waktu|tempat|dilaksanakan))/i,
-    ],
-    ""
+  // 3. Extract time - simple pattern for Lirboyo's time format
+  const timeMatch = text.match(
+    /Waktu\s*[+:]\s*(\d+)[.:](\d+)\s*Wis\s*\(?\s*Malam\s*\)?/i
   );
+  let time = "00:00";
+  if (timeMatch) {
+    const hours = parseInt(timeMatch[1]);
+    const minutes = parseInt(timeMatch[2]);
+    // Convert to 24-hour format if "Malam" is present
+    const isPm = text.toLowerCase().includes("malam");
+    time = `${isPm && hours < 12 ? hours + 12 : hours}:${minutes
+      .toString()
+      .padStart(2, "0")}`;
+  }
 
-  // 4. Extract time - handle Lirboyo's "Wis (Malam)" format
-  const rawTime = getMatch(
-    [
-      /Waktu\s*:\s*(\d+[.:]\d+\s*Wis\s*\(?\s*Malam\s*\)?)/i,
-      /waktu\s*:\s*(\d+[.:]\d+\s*(?:Pagi|Siang|Sore|Malam))/i,
-      /waktu\s*:\s*(\d+[.:]\d+)/i,
-    ],
-    "00:00"
+  // 4. Extract location - stop at common endings
+  const locationMatch = text.match(
+    /Tempat\s*:\s*(.*?)(?=\s*(?:demikian|wassalam|assalam|pengurus))/i
   );
-
-  // 5. Extract location - stop at common document endings
-  const location = getMatch(
-    [
-      /Tempat\s*:\s*(.*?)(?=\s*(?:demikian|wassalam|assalam|pengurus|sekretariat))/i,
-      /tempat\s*:\s*(.*?)(?=\s*(?:wassalam|assalam))/i,
-    ],
-    "Kantor"
-  )
-    .split(/[,.]/)[0]
-    .trim();
+  const location = locationMatch
+    ? locationMatch[1].split(/[,.]/)[0].trim()
+    : "Kantor";
 
   return {
-    meetingType: meetingType || "Rapat Evaluasi",
-    day: day || "",
-    date: convertToGregorianDate(rawDate) || "tanggal belum ditentukan",
-    time: normalizeTime(rawTime),
-    location: location || "Kantor",
+    meetingType: meetingType,
+    day: dayOfWeek,
+    date: gregorianDate,
+    time: time,
+    location: location,
   };
 }
 
