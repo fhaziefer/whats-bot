@@ -45,18 +45,34 @@ const replyTemplates = {
 // Pra-pemrosesan gambar untuk meningkatkan akurasi OCR
 async function preprocessImage(imagePath) {
   try {
-    const image = await Jimp.read(imagePath);
-    await image
-      .greyscale() // Konversi ke grayscale
-      .contrast(0.5) // Tingkatkan kontras
-      .normalize() // Normalisasi warna
-      .quality(90) // Pertahankan kualitas
-      .writeAsync(imagePath);
+    // Tambahkan validasi file terlebih dahulu
+    await fs.promises.access(imagePath, fs.constants.R_OK | fs.constants.W_OK);
 
-    logger.debug("Image preprocessing completed", { imagePath });
+    const image = await Jimp.read(imagePath).catch((err) => {
+      logger.error("Jimp read error", { error: err.message });
+      throw new Error("Failed to read image with Jimp");
+    });
+
+    // Lakukan preprocessing bertahap dengan error handling
+    await image.greyscale().contrast(0.5).normalize().quality(90);
+
+    // Tulis ke file temporary yang berbeda
+    const processedPath = imagePath + ".processed.jpg";
+    await image.writeAsync(processedPath);
+
+    logger.debug("Image preprocessing completed", {
+      original: imagePath,
+      processed: processedPath,
+    });
+
+    return processedPath; // Kembalikan path file yang sudah diproses
   } catch (error) {
-    logger.error("Image preprocessing failed", { error, imagePath });
-    throw new Error("Failed to preprocess image");
+    logger.error("Image preprocessing failed", {
+      error: error.message,
+      stack: error.stack,
+      imagePath,
+    });
+    throw new Error("Failed to preprocess image: " + error.message);
   }
 }
 
@@ -64,9 +80,19 @@ async function preprocessImage(imagePath) {
 async function extractTextFromImage(imagePath) {
   logger.info(`Starting OCR processing for image: ${imagePath}`);
   let worker;
+  let processedImagePath = imagePath;
 
   try {
-    await preprocessImage(imagePath);
+    // Coba preprocessing, jika gagal lanjut dengan gambar asli
+    try {
+      processedImagePath = await preprocessImage(imagePath);
+    } catch (preprocessError) {
+      logger.warn("Using original image due to preprocessing failure", {
+        error: preprocessError.message,
+        imagePath,
+      });
+      processedImagePath = imagePath;
+    }
 
     worker = await createWorker({
       langPath: "https://tessdata.projectnaptha.com/4.0.0_best",
@@ -75,33 +101,38 @@ async function extractTextFromImage(imagePath) {
       logger: (m) => logger.debug(m.status),
     });
 
-    await worker.loadLanguage("eng+ind"); // Dukung bahasa Inggris dan Indonesia
+    await worker.loadLanguage("eng+ind");
     await worker.initialize("eng+ind");
 
     const {
       data: { text },
-    } = await worker.recognize(imagePath);
-    logger.info(`OCR completed`, {
-      imagePath,
-      textLength: text.length,
-      first50Chars: text.substring(0, 50) + "...",
-    });
+    } = await worker.recognize(processedImagePath);
+
+    // Hapus file processed jika berhasil dibuat
+    if (processedImagePath !== imagePath) {
+      await unlink(processedImagePath).catch((e) =>
+        logger.warn("Failed to delete processed image", { error: e })
+      );
+    }
 
     return text;
   } catch (error) {
     logger.error("OCR Processing Error", {
       error: error.message,
       stack: error.stack,
-      imagePath,
+      imagePath: processedImagePath,
     });
     throw error;
   } finally {
-    if (worker) {
-      try {
-        await worker.terminate();
-      } catch (terminateError) {
-        logger.error("Worker termination error", { error: terminateError });
-      }
+    // Cleanup
+    if (worker)
+      await worker
+        .terminate()
+        .catch((e) => logger.error("Worker termination error", e));
+    if (processedImagePath !== imagePath) {
+      await unlink(processedImagePath).catch((e) =>
+        logger.warn("Failed to delete processed image in finally", { error: e })
+      );
     }
   }
 }
