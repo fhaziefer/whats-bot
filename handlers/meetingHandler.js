@@ -43,94 +43,14 @@ async function extractTextFromImage(imagePath) {
   }
 }
 
-function convertToGregorianDate(rawDate) {
-  try {
-    if (!rawDate || typeof rawDate !== "string") {
-      return "tanggal belum ditentukan";
-    }
-
-    // Extract Gregorian date from "Hijri/Gregorian" format
-    const gregorianMatch = rawDate.match(
-      /\d+\s\w+\s\d+\sH\.?\/\s*(\d+\s\w+\s\d+\sM)/i
-    );
-    if (gregorianMatch && gregorianMatch[1]) {
-      return gregorianMatch[1].replace(/M\.?/i, "").trim();
-    }
-
-    // If no Hijri/Gregorian format, try to parse as Gregorian directly
-    const cleanedDate = rawDate
-      .replace(/[^\w\s\d-]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    // Try multiple date formats
-    const formats = [
-      "DD MMMM YYYY",
-      "DD-MM-YYYY",
-      "D MMMM YYYY",
-      "DD/MM/YYYY",
-      "YYYY-MM-DD",
-    ];
-
-    let mDate;
-    for (const format of formats) {
-      mDate = moment(cleanedDate, format);
-      if (mDate.isValid()) break;
-    }
-
-    if (!mDate.isValid()) {
-      console.warn(`Invalid date format: ${rawDate}`);
-      return rawDate;
-    }
-
-    return mDate.format("DD MMMM YYYY");
-  } catch (error) {
-    console.error("Date conversion error:", error);
-    return rawDate;
-  }
-}
-
-function normalizeTime(timeStr) {
-  if (!timeStr) return "00:00";
-
-  // Clean the time string
-  timeStr = timeStr
-    .replace(/[^\d\w\s:.]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  // Extract time parts
-  const timeMatch = timeStr.match(
-    /(\d{1,2})[.:]?(\d{2})?\s*(Pagi|Siang|Sore|Malam|pagi|siang|sore|malam)?/i
-  );
-  if (!timeMatch) return "00:00";
-
-  let hours = parseInt(timeMatch[1]) || 0;
-  const minutes = parseInt(timeMatch[2]) || 0;
-  const period = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
-
-  // Convert to 24-hour format
-  if (period === "malam" && hours < 12) hours += 12;
-  if (period === "siang" && hours < 12) hours += 12;
-  if (period === "sore" && hours < 12) hours += 12;
-
-  // Ensure valid time
-  hours = Math.min(23, Math.max(0, hours));
-  const normalizedMinutes = Math.min(59, Math.max(0, minutes));
-
-  return `${hours.toString().padStart(2, "0")}:${normalizedMinutes
-    .toString()
-    .padStart(2, "0")}`;
-}
-
 function extractMeetingDetails(text) {
   if (!text || typeof text !== "string" || text.length < 10) {
     throw new Error("Invalid text input");
   }
 
-  // Clean the text more aggressively
+  // Clean the text - more aggressive cleaning
   text = text
-    .replace(/[~©‘’]/g, " ")
+    .replace(/[‘’'`~©+]/g, " ")
     .replace(/\s+/g, " ")
     .replace(/\n/g, " ")
     .trim();
@@ -148,46 +68,49 @@ function extractMeetingDetails(text) {
     return defaultValue;
   };
 
-  // Extract meeting type
+  // 1. Extract meeting type - look for "dalam rangka" pattern
   const meetingType = getMatch(
     [
-      /Perihal\s*:\s*UNDANGAN\s*(.*?)(?=\s*(?:hari|tanggal|waktu|tempat|dilaksanakan|assalam|wassalam))/i,
-      /rapat\s*(Evaluasi.*?)(?=\s*(?:hari|tanggal|waktu|tempat|dilaksanakan))/i,
-      /undangan\s*(rapat.*?)(?=\s*(?:hari|tanggal|waktu|tempat|dilaksanakan))/i,
+      /dalam\s+rangka\s+(.*?)(?=\s*(?:yang\s+insya|pada|hari|tanggal|waktu|tempat))/i,
+      /Perihal\s*:\s*UNDANGAN\s*(.*?)(?=\s*(?:kepada|yang|hari|tanggal))/i,
+      /undangan\s*(.*?)(?=\s*(?:hari|tanggal|waktu|tempat))/i,
     ],
     "Rapat"
   );
 
-  // Extract day
+  // 2. Extract day - specific pattern for Lirboyo format
   const day = getMatch(
     [
       /Hari\s*:\s*(.*?)(?=\s*(?:tanggal|waktu|tempat|dilaksanakan|assalam|wassalam))/i,
+      /hari\s*:\s*(.*?)(?=\s*(?:tanggal|waktu|tempat))/i,
     ],
     ""
-  ).replace(/’/g, "'"); // Fix apostrophe
+  ).replace(/jum\s*at/gi, "Jum'at"); // Fix Jumat spelling
 
-  // Extract date
+  // 3. Extract date - prioritize Gregorian date extraction
   const rawDate = getMatch(
     [
-      /Tanggal\s*:\s*(.*?)(?=\s*(?:waktu|tempat|dilaksanakan|assalam|wassalam))/i,
-      /dilaksanakan\s*pada\s*(.*?)(?=\s*(?:waktu|tempat))/i,
+      /Tanggal\s*:\s*(.*?\/\s*\d+\s+\w+\s+\d+\s+M)/i, // Match Hijri/Gregorian format
+      /tanggal\s*:\s*(.*?)(?=\s*(?:waktu|tempat|dilaksanakan))/i,
     ],
     ""
   );
 
-  // Extract time
+  // 4. Extract time - handle Lirboyo's "Wis (Malam)" format
   const rawTime = getMatch(
     [
-      /Waktu\s*:\s*(.*?)(?=\s*(?:tempat|dilaksanakan|assalam|wassalam))/i,
-      /waktu\s*(\d+[.:]\d+\s*Wis.*?)(?=\s*(?:tempat|dilaksanakan))/i,
+      /Waktu\s*:\s*(\d+[.:]\d+\s*Wis\s*\(?\s*Malam\s*\)?)/i,
+      /waktu\s*:\s*(\d+[.:]\d+\s*(?:Pagi|Siang|Sore|Malam))/i,
+      /waktu\s*:\s*(\d+[.:]\d+)/i,
     ],
     "00:00"
   );
 
-  // Extract location
+  // 5. Extract location - stop at common document endings
   const location = getMatch(
     [
       /Tempat\s*:\s*(.*?)(?=\s*(?:demikian|wassalam|assalam|pengurus|sekretariat))/i,
+      /tempat\s*:\s*(.*?)(?=\s*(?:wassalam|assalam))/i,
     ],
     "Kantor"
   )
@@ -195,12 +118,78 @@ function extractMeetingDetails(text) {
     .trim();
 
   return {
-    meetingType: meetingType,
-    day: day,
-    date: convertToGregorianDate(rawDate),
+    meetingType: meetingType || "Rapat Evaluasi",
+    day: day || "",
+    date: convertToGregorianDate(rawDate) || "tanggal belum ditentukan",
     time: normalizeTime(rawTime),
-    location: location,
+    location: location || "Kantor",
   };
+}
+
+function convertToGregorianDate(rawDate) {
+  if (!rawDate) return "";
+
+  try {
+    // Try to extract Gregorian part from "Hijri/Gregorian" format
+    const gregMatch = rawDate.match(/\/(\d+\s+\w+\s+\d+\s*M)/i);
+    if (gregMatch && gregMatch[1]) {
+      return gregMatch[1].replace(/\s*M/i, "").trim();
+    }
+
+    // If no slash format, try to parse directly
+    const cleaned = rawDate
+      .replace(/[^\w\s\d-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // Try common date formats
+    const formats = ["DD MMMM YYYY", "D MMMM YYYY", "DD-MM-YYYY", "YYYY-MM-DD"];
+    for (const fmt of formats) {
+      const mDate = moment(cleaned, fmt);
+      if (mDate.isValid()) {
+        return mDate.format("DD MMMM YYYY");
+      }
+    }
+
+    return cleaned;
+  } catch (error) {
+    console.error("Date conversion error:", error);
+    return rawDate;
+  }
+}
+
+function normalizeTime(timeStr) {
+  if (!timeStr) return "00:00";
+
+  // Clean the time string
+  timeStr = timeStr
+    .toLowerCase()
+    .replace(/[^\d\w\s:.]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Extract time parts
+  const timeMatch = timeStr.match(
+    /(\d{1,2})[.:]?(\d{2})?\s*(pagi|siang|sore|malam)?/i
+  );
+  if (!timeMatch) return "00:00";
+
+  let hours = parseInt(timeMatch[1]) || 0;
+  const minutes = parseInt(timeMatch[2]) || 0;
+  const period = timeMatch[3];
+
+  // Convert to 24-hour format
+  if (period === "malam" && hours < 12) hours += 12;
+  if (period === "siang" && hours < 12) hours += 12;
+  if (period === "sore" && hours < 12) hours += 12;
+
+  // Ensure valid time
+  hours = Math.min(23, Math.max(0, hours));
+  const normMins = Math.min(59, Math.max(0, minutes));
+
+  return `${hours.toString().padStart(2, "0")}:${normMins
+    .toString()
+    .padStart(2, "0")}`;
 }
 
 function createShortReply(details) {
