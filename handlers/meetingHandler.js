@@ -1,184 +1,224 @@
 const { createWorker } = require("tesseract.js");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const moment = require("moment");
 const momentHijri = require("moment-hijri");
-moment.locale("id");
-momentHijri.locale("id");
+const chrono = require("chrono-node");
+const Jimp = require("jimp");
+const winston = require("winston");
+
+// Konfigurasi logging terstruktur
+const logger = winston.createLogger({
+  level: process.env.NODE_ENV === "production" ? "info" : "debug",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: "logs/meeting-handler.log" }),
+  ],
+});
 
 // Promisify file operations
 const writeFile = fs.promises.writeFile;
 const unlink = fs.promises.unlink;
 const mkdir = fs.promises.mkdir;
 
+// Template balasan dalam berbagai bahasa
+const replyTemplates = {
+  id: {
+    greeting: "Wa'alaikumussalam Wr. Wb.",
+    thanks: "Matur nuwun sanget kagem undangan",
+    confirmation: "Njeh, InsyaAllah kulo usahaaken hadir.",
+    defaultLocation: "Kantor Muktamar P2L",
+  },
+  en: {
+    greeting: "Dear Sir/Madam,",
+    thanks: "Thank you for the invitation to",
+    confirmation: "I will do my best to attend.",
+    defaultLocation: "P2L Muktamar Office",
+  },
+};
+
+// Pra-pemrosesan gambar untuk meningkatkan akurasi OCR
+async function preprocessImage(imagePath) {
+  try {
+    const image = await Jimp.read(imagePath);
+    await image
+      .greyscale() // Konversi ke grayscale
+      .contrast(0.5) // Tingkatkan kontras
+      .normalize() // Normalisasi warna
+      .quality(90) // Pertahankan kualitas
+      .writeAsync(imagePath);
+
+    logger.debug("Image preprocessing completed", { imagePath });
+  } catch (error) {
+    logger.error("Image preprocessing failed", { error, imagePath });
+    throw new Error("Failed to preprocess image");
+  }
+}
+
+// Ekstraksi teks dari gambar dengan Tesseract.js
 async function extractTextFromImage(imagePath) {
-  console.log(`Processing image: ${imagePath}`);
+  logger.info(`Starting OCR processing for image: ${imagePath}`);
   let worker;
 
   try {
+    await preprocessImage(imagePath);
+
     worker = await createWorker({
-      // logger: (m) => console.log(m.status),
-      // Simplified configuration - let the package handle its own paths
-      langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      langPath: "https://tessdata.projectnaptha.com/4.0.0_best",
+      cachePath: path.join(os.tmpdir(), "tesseract-cache"),
+      cacheMethod: "readwrite",
+      logger: (m) => logger.debug(m.status),
     });
 
-    await worker.loadLanguage("eng");
-    await worker.initialize("eng");
+    await worker.loadLanguage("eng+ind"); // Dukung bahasa Inggris dan Indonesia
+    await worker.initialize("eng+ind");
 
     const {
       data: { text },
     } = await worker.recognize(imagePath);
-    // console.log(`Extracted ${text.length} characters`);
-    console.log(text);
+    logger.info(`OCR completed`, {
+      imagePath,
+      textLength: text.length,
+      first50Chars: text.substring(0, 50) + "...",
+    });
+
     return text;
   } catch (error) {
-    console.error("OCR Processing Error:", error);
-    return "";
+    logger.error("OCR Processing Error", {
+      error: error.message,
+      stack: error.stack,
+      imagePath,
+    });
+    throw error;
   } finally {
     if (worker) {
-      await worker
-        .terminate()
-        .catch((e) => console.error("Termination error:", e));
+      try {
+        await worker.terminate();
+      } catch (terminateError) {
+        logger.error("Worker termination error", { error: terminateError });
+      }
     }
   }
 }
 
-function extractMeetingDetails(text) {
+// Ekstrak detail rapat dari teks
+function extractMeetingDetails(text, language = "id") {
   if (!text || typeof text !== "string" || text.length < 10) {
-    throw new Error("Invalid text input");
+    throw new Error("Invalid text input for meeting details extraction");
   }
 
-  // Enhanced text cleaning
-  text = text
-    .replace(/[‘’'`~©+£]/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(/\n/g, " ")
-    .trim();
+  // Pembersihan teks
+  const cleanedText = cleanText(text);
+  logger.debug("Text after cleaning", {
+    cleanedText: cleanedText.substring(0, 100) + "...",
+  });
 
-  // 1. Extract date
-  const dateMatch = text.match(
-    /Tanggal\s*:\s*(\d+\s+\w+\s+\d+\s*H\.?\/\s*(\d+\s+\w+\s+\d+)\s*M)/i
-  );
-  let gregorianDate = "tanggal belum ditentukan";
-  let dayOfWeek = "Jum'at"; // Default to Jum'at
+  // 1. Ekstraksi tanggal menggunakan chrono-node
+  const dateDetails = extractDateDetails(cleanedText);
 
-  if (dateMatch && dateMatch[2]) {
-    gregorianDate = dateMatch[2]
-      .trim()
-      .replace(/\bMM?aret\b/g, "Maret")
-      .replace(/[^\w\s\d]/g, "");
-  }
+  // 2. Ekstraksi jenis rapat
+  const meetingType = extractMeetingType(cleanedText, language);
 
-  // 2. Extract meeting type with better stopping condition
-  // 2. Extract meeting type with better stopping condition
-  const meetingTypeMatch = text.match(
-    /dalam\s+rangka\s+(.*?)(?=\s*(?:yang\s+insya\s+Allah|pada\s*:|$))/i
-  );
-  const meetingType = meetingTypeMatch
-    ? meetingTypeMatch[1]
-        .replace(/\s+/g, " ")
-        .replace(/[^\w\s.,-]/g, "")
-        .trim()
-    : "Rapat";
+  // 3. Ekstraksi waktu
+  const time = extractTime(cleanedText);
 
-  // 3. Extract time
-  const timeMatch = text.match(
-    /Waktu\s*[^:\d]*(\d{1,2})[.:\s]*(\d{2})?\s*Wis?\s*\(?\s*Malam\s*\)?/i
-  );
-  let time = "00:00";
-  if (timeMatch) {
-    let hours = parseInt(timeMatch[1]) || 0;
-    const minutes = parseInt(timeMatch[2]) || 0;
-    if (text.toLowerCase().includes("malam") && hours < 12) {
-      hours += 12;
-    }
-    time = `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}`;
-  }
-
-  // 4. Improved location extraction - stops at line end or punctuation
-  const locationMatch = text.match(/Tempat\s*:\s*([^\n.,;]+)/i);
-  let location = "Kantor Muktamar P2L"; // Default value
-  if (locationMatch) {
-    location = locationMatch[1]
-      .split(/[.,;]/)[0] // Split at punctuation
-      .replace(/Demikian.*$/i, "") // Remove any "Demikian" text
-      .trim();
-
-    // Special case for P2L
-    if (location.includes("P2L")) {
-      location = "Kantor Muktamar P2L";
-    }
-  }
+  // 4. Ekstraksi lokasi
+  const location = extractLocation(cleanedText, language);
 
   return {
-    meetingType: meetingType,
-    day: dayOfWeek,
-    date: gregorianDate,
-    time: time,
-    location: location,
+    meetingType,
+    day: dateDetails.day,
+    date: dateDetails.gregorianDate,
+    time,
+    location,
+    rawText: cleanedText.substring(0, 200) + "...", // Untuk debugging
   };
 }
 
-function convertToGregorianDate(rawDate) {
-  if (!rawDate) return "";
-
-  try {
-    // Try to extract Gregorian part from "Hijri/Gregorian" format
-    const gregMatch = rawDate.match(/\/(\d+\s+\w+\s+\d+\s*M)/i);
-    if (gregMatch && gregMatch[1]) {
-      return gregMatch[1].replace(/\s*M/i, "").trim();
-    }
-
-    // If no slash format, try to parse directly
-    const cleaned = rawDate
-      .replace(/[^\w\s\d-]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    // Try common date formats
-    const formats = ["DD MMMM YYYY", "D MMMM YYYY", "DD-MM-YYYY", "YYYY-MM-DD"];
-    for (const fmt of formats) {
-      const mDate = moment(cleaned, fmt);
-      if (mDate.isValid()) {
-        return mDate.format("DD MMMM YYYY");
-      }
-    }
-
-    return cleaned;
-  } catch (error) {
-    console.error("Date conversion error:", error);
-    return rawDate;
-  }
+// Fungsi bantu untuk membersihkan teks
+function cleanText(text) {
+  return text
+    .replace(/[‘’'`~©+£•®]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\n/g, " ")
+    .trim();
 }
 
-function normalizeTime(timeStr) {
-  if (!timeStr) return "00:00";
+// Fungsi bantu untuk ekstraksi tanggal
+function extractDateDetails(text) {
+  const dates = chrono.parse(text);
+  let gregorianDate = "tanggal belum ditentukan";
+  let dayOfWeek = "Jum'at"; // Default
 
-  // Clean the time string
-  timeStr = timeStr
-    .toLowerCase()
-    .replace(/[^\d\w\s:.]/g, "")
+  if (dates.length > 0) {
+    const parsedDate = dates[0].start.date();
+    gregorianDate = moment(parsedDate).format("DD MMMM YYYY");
+    dayOfWeek = moment(parsedDate).locale("id").format("dddd");
+
+    logger.debug("Date parsed successfully", {
+      input: text.substring(0, 50),
+      parsedDate,
+      gregorianDate,
+      dayOfWeek,
+    });
+  }
+
+  return { gregorianDate, day: dayOfWeek };
+}
+
+// Fungsi bantu untuk ekstraksi jenis rapat
+function extractMeetingType(text, language) {
+  const patterns = {
+    id: /dalam\s+rangka\s+(.*?)(?=\s*(?:yang\s+insya\s+Allah|pada\s*:|$))/i,
+    en: /(meeting|invitation)\s+for\s+(.*?)(?=\s*(?:will be held|on\s*:|$))/i,
+  };
+
+  const match = text.match(patterns[language] || patterns.id);
+  const defaultType = language === "id" ? "Rapat" : "Meeting";
+
+  if (!match) return defaultType;
+
+  return match[1]
     .replace(/\s+/g, " ")
+    .replace(/[^\w\s.,-]/g, "")
     .trim();
+}
 
-  // Extract time parts
-  const timeMatch = timeStr.match(
-    /(\d{1,2})[.:]?(\d{2})?\s*(pagi|siang|sore|malam)?/i
-  );
+// Fungsi bantu untuk ekstraksi waktu
+function extractTime(text) {
+  const timeMatch =
+    text.match(
+      /Waktu\s*[^:\d]*(\d{1,2})[.:\s]*(\d{2})?\s*(WIB|WITA|WIT)?\s*\(?\s*(Pagi|Siang|Sore|Malam)?\s*\)?/i
+    ) || text.match(/(\d{1,2})[.:](\d{2})\s*(AM|PM)?/i);
+
   if (!timeMatch) return "00:00";
 
   let hours = parseInt(timeMatch[1]) || 0;
   const minutes = parseInt(timeMatch[2]) || 0;
-  const period = timeMatch[3];
+  const period = timeMatch[4] || timeMatch[3];
 
-  // Convert to 24-hour format
-  if (period === "malam" && hours < 12) hours += 12;
-  if (period === "siang" && hours < 12) hours += 12;
-  if (period === "sore" && hours < 12) hours += 12;
+  // Konversi ke format 24 jam
+  if (period) {
+    const periodLower = period.toLowerCase();
+    if (
+      (periodLower === "pm" ||
+        periodLower === "malam" ||
+        periodLower === "sore") &&
+      hours < 12
+    ) {
+      hours += 12;
+    }
+    if ((periodLower === "am" || periodLower === "pagi") && hours === 12) {
+      hours = 0;
+    }
+  }
 
-  // Ensure valid time
+  // Pastikan jam valid
   hours = Math.min(23, Math.max(0, hours));
   const normMins = Math.min(59, Math.max(0, minutes));
 
@@ -187,90 +227,161 @@ function normalizeTime(timeStr) {
     .padStart(2, "0")}`;
 }
 
-function createShortReply(details) {
-  if (!details || typeof details !== "object") {
-    return `Wa'alaikumussalam Wr. Wb.\n\nMatur nuwun sanget kagem undanganipun, insyaAllah kulo usahaaken hadir.`;
+// Fungsi bantu untuk ekstraksi lokasi
+function extractLocation(text, language) {
+  const patterns = {
+    id: /Tempat\s*:\s*([^\n.,;]+)/i,
+    en: /Location\s*:\s*([^\n.,;]+)/i,
+  };
+
+  const match = text.match(patterns[language] || patterns.id);
+  const defaultLocation = replyTemplates[language].defaultLocation;
+
+  if (!match) return defaultLocation;
+
+  let location = match[1]
+    .split(/[.,;]/)[0]
+    .replace(/Demikian.*$/i, "")
+    .trim();
+
+  // Normalisasi lokasi khusus
+  if (location.includes("P2L") || location.includes("Muktamar")) {
+    return defaultLocation;
   }
 
-  return (
-    `Wa'alaikumussalam Wr. Wb.\n` +
-    `Matur nuwun sanget kagem undangan ${details.meetingType}.\n` +
-    (details.day ? `Hari: ${details.day}\n` : "") +
-    `Tanggal: ${details.date}\n` +
-    `Waktu: ${details.time}\n` +
-    `Tempat: ${details.location}\n\n` +
-    `Njeh, InsyaAllah kulo usahaaken hadir.`
-  );
+  return location;
 }
 
+// Membuat balasan singkat
+function createShortReply(details, language = "id") {
+  if (!details || typeof details !== "object") {
+    return `${replyTemplates[language].greeting}\n\n${replyTemplates[language].thanks}ipun, insyaAllah kulo usahaaken hadir.`;
+  }
+
+  const template = replyTemplates[language];
+
+  return [
+    template.greeting,
+    `${template.thanks} ${details.meetingType}.`,
+    details.day && `Hari: ${details.day}`,
+    `Tanggal: ${details.date}`,
+    `Waktu: ${details.time}`,
+    `Tempat: ${details.location}`,
+    "",
+    template.confirmation,
+  ]
+    .filter((line) => line)
+    .join("\n");
+}
+
+// Fungsi utama untuk menangani pesan meeting
 async function handleMeeting(message, botInfo) {
-  // Skip if from bot itself or group
+  // Skip jika dari bot sendiri atau grup
   if (
     !message ||
     !botInfo ||
     message.from === `${botInfo?.botNumber}@c.us` ||
     message.from.includes("@g.us")
   ) {
+    logger.debug("Message skipped (from bot or group)");
     return false;
   }
 
   let text = message.body || "";
   let isImage = false;
-
-  // Process image if exists
-  if (message.hasMedia) {
-    try {
-      const media = await message.downloadMedia();
-      if (media && media.mimetype.startsWith("image/")) {
-        const tempDir = "./temp";
-        try {
-          await mkdir(tempDir, { recursive: true });
-        } catch (mkdirError) {
-          if (mkdirError.code !== "EEXIST") throw mkdirError;
-        }
-
-        const fileExt = media.mimetype.split("/")[1] || "jpg";
-        const filePath = path.join(tempDir, `invite_${Date.now()}.${fileExt}`);
-
-        await writeFile(filePath, media.data, "base64");
-        text = await extractTextFromImage(filePath);
-        await unlink(filePath);
-        isImage = true;
-
-        if (!text || text.trim().length < 20) {
-          console.log("No valid text extracted from image");
-          return false;
-        }
-      }
-    } catch (error) {
-      console.error("Image processing error:", error);
-      return false;
-    }
-  }
-
-  // Check if it's an invitation
-  if (!/(undangan|rapat|wekdalipun|panggenanipun)/i.test(text)) {
-    return false;
-  }
+  const startTime = Date.now();
 
   try {
-    const details = extractMeetingDetails(text);
-    console.log("Extracted details:", JSON.stringify(details, null, 2));
+    // Proses gambar jika ada
+    if (message.hasMedia) {
+      try {
+        const media = await message.downloadMedia();
+        if (media && media.mimetype.startsWith("image/")) {
+          const tempDir = os.tmpdir();
+          const fileExt = media.mimetype.split("/")[1] || "jpg";
+          const filePath = path.join(
+            tempDir,
+            `invite_${Date.now()}.${fileExt}`
+          );
 
-    await new Promise((resolve) => setTimeout(resolve, 15000)); // 15s delay
-    await message.reply(createShortReply(details));
+          await writeFile(filePath, media.data, "base64");
+          text = await extractTextFromImage(filePath);
+          await unlink(filePath).catch((e) =>
+            logger.warn("Failed to delete temp file", { error: e })
+          );
+          isImage = true;
+
+          if (!text || text.trim().length < 20) {
+            logger.warn("No valid text extracted from image");
+            return false;
+          }
+        }
+      } catch (error) {
+        logger.error("Image processing error", { error });
+        throw error;
+      }
+    }
+
+    // Periksa apakah ini undangan
+    if (
+      !/(undangan|rapat|wekdalipun|panggenanipun|invitation|meeting)/i.test(
+        text
+      )
+    ) {
+      logger.debug("Not a meeting invitation", {
+        text: text.substring(0, 50) + "...",
+      });
+      return false;
+    }
+
+    // Deteksi bahasa
+    const language =
+      /[a-zA-Z]/.test(text) && !/[a-zA-Z][a-zA-Z]/.test(text) ? "id" : "en";
+
+    // Ekstrak detail rapat
+    const details = extractMeetingDetails(text, language);
+    logger.info("Meeting details extracted", { details });
+
+    // Kirim balasan dengan delay eksponensial
+    await delayedReply(message, createShortReply(details, language));
+
+    logger.info("Meeting invitation processed successfully", {
+      processingTime: `${Date.now() - startTime}ms`,
+      isImage,
+      language,
+    });
+
     return true;
   } catch (error) {
-    console.error("Error processing invitation:", error);
-    // Fallback reply
-    await new Promise((resolve) => setTimeout(resolve, 15000));
-    await message.reply(
-      `Wa'alaikumussalam Wr. Wb.\n\n` +
-        `Matur nuwun sanget kagem undanganipun.\n\n` +
-        `Wassalamu'alaikum Wr. Wb.`
-    );
+    logger.error("Error processing meeting invitation", {
+      error: error.message,
+      stack: error.stack,
+      text: text.substring(0, 100) + "...",
+    });
+
+    // Balasan fallback
+    try {
+      await delayedReply(
+        message,
+        `${replyTemplates["id"].greeting}\n\n` +
+          `${replyTemplates["id"].thanks}ipun.\n\n` +
+          `Wassalamu'alaikum Wr. Wb.`
+      );
+    } catch (replyError) {
+      logger.error("Failed to send fallback reply", { error: replyError });
+    }
+
     return false;
   }
+}
+
+// Fungsi untuk mengirim balasan dengan delay eksponensial
+async function delayedReply(message, text, attempt = 1) {
+  const delay = Math.min(15000 * Math.pow(2, attempt - 1), 120000);
+  logger.debug(`Delaying reply for ${delay}ms`, { attempt });
+
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  await message.reply(text);
 }
 
 module.exports = { handleMeeting };
