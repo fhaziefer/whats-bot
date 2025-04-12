@@ -16,19 +16,14 @@ async function extractTextFromImage(imagePath) {
   let worker;
 
   try {
-    worker = await createWorker({
-      // logger: (m) => console.log(m.status),
-      // Simplified configuration - let the package handle its own paths
-      langPath: "https://tessdata.projectnaptha.com/4.0.0",
-    });
-
+    // Gunakan pendekatan yang lebih sederhana
+    worker = await createWorker();
     await worker.loadLanguage("eng");
     await worker.initialize("eng");
 
     const {
       data: { text },
     } = await worker.recognize(imagePath);
-    // console.log(`Extracted ${text.length} characters`);
     console.log(text);
     return text;
   } catch (error) {
