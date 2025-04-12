@@ -52,148 +52,70 @@ function extractMeetingDetails(text) {
 
   // Enhanced text cleaning
   text = cleanOcrText(text);
-  text = text
-    .replace(/::+/g, ":") // Normalize multiple colons to single
-    .replace(/:\s*:/g, ":") // Handle cases with space between colons
-    .replace(/\s+/g, " ")
-    .trim();
-
-  console.log(text);
-
-  // 1. Extract day - handle various colon formats
-  const dayMatch = text.match(/Hari\s*[: ]+\s*([^\n]+?)(?=\s*(?:Tanggal|$))/i);
-  const dayOfWeek = dayMatch ? dayMatch[1].trim() : "Hari belum ditentukan";
-
-  // 2. Extract date - handle colon variations
-  const dateMatch = text.match(
-    /Tanggal\s*[: ]+\s*(\d+\s+\w+\s+\d+\s*H\s*\/\s*(\d+\s+\w+\s+\d+)\s*M)/i
-  );
-
-  let gregorianDate = "tanggal belum ditentukan";
-  if (dateMatch && dateMatch[2]) {
-    gregorianDate = dateMatch[2].replace(/\s*M$/, "").trim();
-  }
-
-  // 3. Extract meeting type
-  const meetingTypeMatch = text.match(
-    /(?:acara|rapat)\s*(.*?)(?=\s*(?:yang akan|pada\s*[: ]|dilaksanakan|$))/i
-  );
-  const meetingType = meetingTypeMatch
-    ? meetingTypeMatch[1].replace(/\s+/g, " ").trim()
-    : "Rapat Harian";
-
-  // 4. Extract time - handle colon variations
-  const timeMatch = text.match(
-    /Waktu\s*[: ]+\s*(\d{1,2})[:.](\d{2})\s*Wis?\s*\.?\s*Malam/i
-  );
-
-  let time = "00:00";
-  if (timeMatch) {
-    let hours = parseInt(timeMatch[1]) || 0;
-    const minutes = parseInt(timeMatch[2]) || 0;
-    if (text.includes("Malam") && hours < 12) hours += 12;
-    time = `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}`;
-  }
-
-  // 5. Extract location - handle colon variations
-  const locationMatch = text.match(/Tempat\s*[: ]+\s*([^\n.,;]+)/i);
-  const location = locationMatch
-    ? locationMatch[1].split(/[.,;]/)[0].trim()
-    : "Kantor";
-
-  return {
-    meetingType: meetingType.includes("Rapat")
-      ? meetingType
-      : "Rapat " + meetingType,
-    day: dayOfWeek,
-    date: gregorianDate,
-    time: time,
-    location: location,
-  };
-}
-
-function convertToGregorianDate(rawDate) {
-  if (!rawDate) return "";
-
-  try {
-    // Try to extract Gregorian part from "Hijri/Gregorian" format
-    const gregMatch = rawDate.match(/\/(\d+\s+\w+\s+\d+\s*M)/i);
-    if (gregMatch && gregMatch[1]) {
-      return gregMatch[1].replace(/\s*M/i, "").trim();
+  function extractMeetingDetails(text) {
+    if (!text || typeof text !== "string" || text.length < 10) {
+      throw new Error("Invalid text input");
     }
-
-    // If no slash format, try to parse directly
-    const cleaned = rawDate
-      .replace(/[^\w\s\d-]/g, " ")
+  
+    // Enhanced text cleaning
+    text = text
+      .replace(/[~©®™+•”"“|]/g, ":")
+      .replace(/::+/g, ":")
+      .replace(/:\s*:/g, ":")
       .replace(/\s+/g, " ")
       .trim();
-
-    // Try common date formats
-    const formats = ["DD MMMM YYYY", "D MMMM YYYY", "DD-MM-YYYY", "YYYY-MM-DD"];
-    for (const fmt of formats) {
-      const mDate = moment(cleaned, fmt);
-      if (mDate.isValid()) {
-        return mDate.format("DD MMMM YYYY");
-      }
+  
+    console.log("Cleaned text:", text);
+  
+    // 1. Extract meeting type - more precise pattern
+    const meetingTypeMatch = text.match(
+      /(?:acara|rapat)\s*(.*?)\s*(?:yang akan dilaksanakan|pada|$)/i
+    );
+    const meetingType = meetingTypeMatch 
+      ? `Rapat ${meetingTypeMatch[1].trim().replace(/\.$/, '')}`
+      : "Rapat Harian";
+  
+    // 2. Extract day - exact pattern
+    const dayMatch = text.match(/Hari\s*:\s*([^\n]+?)(?=\s*Tanggal|$)/i);
+    const dayOfWeek = dayMatch ? dayMatch[1].trim() : "";
+  
+    // 3. Extract date - keep both Hijri and Gregorian
+    const dateMatch = text.match(/Tanggal\s*:\s*([^\n]+?)(?=\s*Waktu|$)/i);
+    const fullDate = dateMatch ? dateMatch[1].trim() : "";
+  
+    // 4. Extract time - keep original format
+    const timeMatch = text.match(/Waktu\s*:\s*([^\n]+?)(?=\s*Tempat|$)/i);
+    const time = timeMatch ? timeMatch[1].trim() : "";
+  
+    // 5. Extract location - stop at punctuation
+    const locationMatch = text.match(/Tempat\s*:\s*([^\n.,;]+)/i);
+    const location = locationMatch ? locationMatch[1].trim() : "Kantor";
+  
+    return {
+      acara: meetingType,
+      hari: dayOfWeek,
+      tanggal: fullDate,
+      waktu: time,
+      tempat: location
+    };
+  }
+  
+  function createShortReply(details) {
+    if (!details || typeof details !== "object") {
+      return `Wa'alaikumussalam Wr. Wb.\n\nMatur nuwun sanget kagem undanganipun, insyaAllah kulo usahaaken hadir.`;
     }
-
-    return cleaned;
-  } catch (error) {
-    console.error("Date conversion error:", error);
-    return rawDate;
+  
+    return (
+      `Wa'alaikumussalam Wr. Wb.\n\n` +
+      `Detail Undangan:\n` +
+      `Acara: ${details.acara}\n` +
+      `Hari: ${details.hari}\n` +
+      `Tanggal: ${details.tanggal}\n` +
+      `Waktu: ${details.waktu}\n` +
+      `Tempat: ${details.tempat}\n\n` +
+      `Matur nuwun sanget, insyaAllah kulo usahaaken hadir.`
+    );
   }
-}
-
-function normalizeTime(timeStr) {
-  if (!timeStr) return "00:00";
-
-  // Clean the time string
-  timeStr = timeStr
-    .toLowerCase()
-    .replace(/[^\d\w\s:.]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  // Extract time parts
-  const timeMatch = timeStr.match(
-    /(\d{1,2})[.:]?(\d{2})?\s*(pagi|siang|sore|malam)?/i
-  );
-  if (!timeMatch) return "00:00";
-
-  let hours = parseInt(timeMatch[1]) || 0;
-  const minutes = parseInt(timeMatch[2]) || 0;
-  const period = timeMatch[3];
-
-  // Convert to 24-hour format
-  if (period === "malam" && hours < 12) hours += 12;
-  if (period === "siang" && hours < 12) hours += 12;
-  if (period === "sore" && hours < 12) hours += 12;
-
-  // Ensure valid time
-  hours = Math.min(23, Math.max(0, hours));
-  const normMins = Math.min(59, Math.max(0, minutes));
-
-  return `${hours.toString().padStart(2, "0")}:${normMins
-    .toString()
-    .padStart(2, "0")}`;
-}
-
-function createShortReply(details) {
-  if (!details || typeof details !== "object") {
-    return `Wa'alaikumussalam Wr. Wb.\n\nMatur nuwun sanget kagem undanganipun, insyaAllah kulo usahaaken hadir.`;
-  }
-
-  return (
-    `Wa'alaikumussalam Wr. Wb.\n` +
-    `Matur nuwun sanget kagem undangan ${details.meetingType}.\n` +
-    (details.day ? `Hari: ${details.day}\n` : "") +
-    `Tanggal: ${details.date}\n` +
-    `Waktu: ${details.time}\n` +
-    `Tempat: ${details.location}\n\n` +
-    `Njeh, InsyaAllah kulo usahaaken hadir.`
-  );
 }
 
 async function handleMeeting(message, botInfo) {
