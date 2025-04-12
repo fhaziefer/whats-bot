@@ -48,80 +48,31 @@ function extractMeetingDetails(text) {
     throw new Error("Invalid text input");
   }
 
-  // Enhanced text cleaning for common OCR errors
+  // Enhanced text cleaning
   text = text
     .replace(/[‘’'`~©+£]/g, " ")
-    .replace(/\bMMaret\b/g, "Maret")
-    .replace(/\bare?t\b/g, "Maret")
-    .replace(/\bJowa\b/g, "Jawa")
-    .replace(/\bLiboyo\b/g, "Lirboyo")
     .replace(/\s+/g, " ")
     .replace(/\n/g, " ")
     .trim();
 
-  // 1. Extract date with robust pattern matching
+  // 1. Extract date
   const dateMatch = text.match(
     /Tanggal\s*:\s*(\d+\s+\w+\s+\d+\s*H\.?\/\s*(\d+\s+\w+\s+\d+)\s*M)/i
   );
   let gregorianDate = "tanggal belum ditentukan";
-  let dayOfWeek = "";
+  let dayOfWeek = "Jum'at"; // Default to Jum'at
 
   if (dateMatch && dateMatch[2]) {
     gregorianDate = dateMatch[2]
       .trim()
       .replace(/\bMM?aret\b/g, "Maret")
       .replace(/[^\w\s\d]/g, "");
-
-    // Manual correction for day name if needed
-    const dayNameMatch = text.match(/Hari\s*:\s*(\w+\s*malam\s*\w+)/i);
-    if (dayNameMatch) {
-      dayOfWeek = dayNameMatch[1].replace(/\s*malam\s*/i, "").trim();
-    } else {
-      try {
-        const dateParts = gregorianDate.split(/\s+/);
-        if (dateParts.length === 3) {
-          const months = {
-            Januari: "January",
-            Februari: "February",
-            Maret: "March",
-            April: "April",
-            Mei: "May",
-            Juni: "June",
-            Juli: "July",
-            Agustus: "August",
-            September: "September",
-            Oktober: "October",
-            November: "November",
-            Desember: "December",
-          };
-
-          const day = dateParts[0].replace(/\D/g, "");
-          const month = months[dateParts[1]] || dateParts[1];
-          const year = dateParts[2];
-
-          const dateObj = new Date(`${month} ${day}, ${year}`);
-          if (!isNaN(dateObj)) {
-            const days = [
-              "Minggu",
-              "Senin",
-              "Selasa",
-              "Rabu",
-              "Kamis",
-              "Jum'at",
-              "Sabtu",
-            ];
-            dayOfWeek = days[dateObj.getDay()];
-          }
-        }
-      } catch (e) {
-        console.error("Error calculating day:", e);
-      }
-    }
   }
 
-  // 2. Extract meeting type with better OCR tolerance
+  // 2. Extract meeting type with better stopping condition
+  // 2. Extract meeting type with better stopping condition
   const meetingTypeMatch = text.match(
-    /dalam\s+rangka\s+([^0-9]+?)\s*(?:yang\s+insya\s+Allah|pada\s*:)/i
+    /dalam\s+rangka\s+(.*?)(?=\s*(?:yang\s+insya\s+Allah|pada\s*:|$))/i
   );
   const meetingType = meetingTypeMatch
     ? meetingTypeMatch[1]
@@ -130,7 +81,7 @@ function extractMeetingDetails(text) {
         .trim()
     : "Rapat";
 
-  // 3. Extract time with robust pattern
+  // 3. Extract time
   const timeMatch = text.match(
     /Waktu\s*[^:\d]*(\d{1,2})[.:\s]*(\d{2})?\s*Wis?\s*\(?\s*Malam\s*\)?/i
   );
@@ -138,8 +89,6 @@ function extractMeetingDetails(text) {
   if (timeMatch) {
     let hours = parseInt(timeMatch[1]) || 0;
     const minutes = parseInt(timeMatch[2]) || 0;
-
-    // Convert to 24-hour format for evening times
     if (text.toLowerCase().includes("malam") && hours < 12) {
       hours += 12;
     }
@@ -148,16 +97,25 @@ function extractMeetingDetails(text) {
       .padStart(2, "0")}`;
   }
 
-  // 4. Extract location with better pattern
+  // 4. Improved location extraction - stops at line end or punctuation
   const locationMatch = text.match(/Tempat\s*:\s*([^\n.,;]+)/i);
-  const location = locationMatch
-    ? locationMatch[1].trim()
-    : "Kantor Muktamar P2L";
+  let location = "Kantor Muktamar P2L"; // Default value
+  if (locationMatch) {
+    location = locationMatch[1]
+      .split(/[.,;]/)[0] // Split at punctuation
+      .replace(/Demikian.*$/i, "") // Remove any "Demikian" text
+      .trim();
+
+    // Special case for P2L
+    if (location.includes("P2L")) {
+      location = "Kantor Muktamar P2L";
+    }
+  }
 
   return {
     meetingType: meetingType,
-    day: dayOfWeek || "Jum'at", // Fallback to Jum'at if not detected
-    date: gregorianDate.replace(/\bMM?aret\b/g, "Maret"),
+    day: dayOfWeek,
+    date: gregorianDate,
     time: time,
     location: location,
   };
