@@ -18,9 +18,7 @@ async function extractTextFromImage(imagePath) {
   try {
     worker = await createWorker();
 
-    // Gunakan API yang benar untuk v4+
     await worker.load();
-    // await worker.initialize("eng");
 
     const {
       data: { text },
