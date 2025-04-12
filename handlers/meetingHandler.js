@@ -12,21 +12,33 @@ const unlink = fs.promises.unlink;
 const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
-  const worker = await createWorker({
-    corePath: "node_modules/tesseract.js/dist/tesseract-core.wasm.js",
-    workerPath: "node_modules/tesseract.js/dist/worker.min.js",
-    langPath: "node_modules/tesseract.js-core/tessdata", // Path lokal
-    logger: (m) => console.log(m.status),
-  });
+  console.log(`Processing image: ${imagePath}`);
+  let worker;
+
   try {
+    // Gunakan konfigurasi minimal
+    worker = await createWorker({
+      logger: (m) => console.log(m.status), // Untuk debugging
+    });
+
+    // Pastikan bahasa tersedia
     await worker.loadLanguage("eng");
     await worker.initialize("eng");
+
     const {
       data: { text },
     } = await worker.recognize(imagePath);
+    console.log("Extracted text:", text);
     return text;
+  } catch (error) {
+    console.error("OCR Processing Error:", error);
+    return "";
   } finally {
-    await worker.terminate();
+    if (worker) {
+      await worker
+        .terminate()
+        .catch((e) => console.error("Termination error:", e));
+    }
   }
 }
 
