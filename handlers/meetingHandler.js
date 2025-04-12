@@ -12,18 +12,13 @@ const unlink = fs.promises.unlink;
 const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
-  const worker = await createWorker({
-    workerPath: "node_modules/tesseract.js/dist/worker.min.js",
-    langPath: "node_modules/tesseract.js-core/tesseract-core.wasm.js",
-  });
-
+  const worker = await createWorker();
   try {
     await worker.loadLanguage("eng");
     await worker.initialize("eng");
     const {
       data: { text },
     } = await worker.recognize(imagePath);
-    console.log(text);
     return text;
   } finally {
     await worker.terminate();
