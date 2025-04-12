@@ -98,52 +98,83 @@ function extractMeetingDetails(text) {
     throw new Error("Invalid text input");
   }
 
-  // Clean the text first
-  text = text.replace(/[~©]/g, ":").replace(/\s+/g, " ").trim();
+  // Clean the text more aggressively
+  text = text
+    .replace(/[~©‘’]/g, " ") // Replace special characters
+    .replace(/\s+/g, " ") // Collapse multiple spaces
+    .replace(/\n/g, " ") // Replace newlines with spaces
+    .trim();
 
   const getMatch = (patterns, defaultValue = "") => {
     for (const pattern of patterns) {
       const match = text.match(pattern);
-      if (match && match[1]) return match[1].trim();
+      if (match && match[1]) {
+        // Clean the matched result
+        return match[1]
+          .trim()
+          .replace(/\s{2,}/g, " ")
+          .replace(/[^a-zA-Z0-9\s\/\-:.,()]/g, "");
+      }
     }
     return defaultValue;
   };
 
-  const rawDate = getMatch(
+  // Extract meeting type (more specific pattern)
+  const meetingType = getMatch(
     [
-      /Tanggal\s*:\s*:\s*(.*?)\s*(?:\n|$)/i,
-      /tanggal\s*:\s*(.*?)\s*\/\s*(.*?)(?:\n|$)/i,
-      /dilaksanakan\s*pada\s*(.*?)(?=\s*(?:waktu|tempat))/i,
+      /Perihal\s*:\s*Undangan\s*(Rapat Harian\s*\d+\s*Pengurus Pusat.*?)(?=\s*(?:hari|tanggal|waktu|tempat|dilaksanakan|assalam|wassalam))/i,
+      /acara\s*(Rapat Harian\s*\d+\s*Pengurus Pusat.*?)(?=\s*(?:hari|tanggal|waktu|tempat|dilaksanakan))/i,
+      /undangan\s*(rapat.*?)(?=\s*(?:hari|tanggal|waktu|tempat|dilaksanakan))/i,
+    ],
+    "Rapat Harian"
+  );
+
+  // Extract day
+  const day = getMatch(
+    [
+      /Hari\s*:\s*(.*?)(?=\s*(?:tanggal|waktu|tempat|dilaksanakan|assalam|wassalam))/i,
+      /hari\s*:\s*(.*?)(?=\s*(?:tanggal|waktu|tempat))/i,
     ],
     ""
   );
 
-  const rawTime = getMatch(
+  // Extract date (more specific pattern)
+  const rawDate = getMatch(
     [
-      /Waktu\s*:\s*(\d{1,2}:\d{2}\s*Wis\.\s*Malam)/i,
-      /waktu\s*:\s*(\d{1,2}\.\d{2}\s*Wis\.\s*Malam)(?:\n|$)/i,
-      /waktu\s*:\s*(.*?)(?:\n|$)/i,
+      /Tanggal\s*:\s*(.*?)(?=\s*(?:waktu|tempat|dilaksanakan|assalam|wassalam))/i,
+      /tanggal\s*:\s*(.*?)(?=\s*(?:waktu|tempat))/i,
     ],
-    "00:00"
+    ""
   );
 
+  // Extract time (cleaner pattern)
+  const rawTime = getMatch(
+    [
+      /Waktu\s*:\s*(\d{1,2}:\d{2}\s*(?:Wis\.)?\s*Malam)/i,
+      /waktu\s*:\s*(\d{1,2}[.:]\d{2}\s*(?:Wis\.)?\s*Malam)/i,
+    ],
+    "00:00"
+  )
+    .replace(/[.:](?=\d{2}\s)/, ":") // Normalize time separator
+    .replace(/\s*Wis\.\s*/i, " "); // Remove "Wis."
+
+  // Extract location (more restrictive pattern)
+  const location = getMatch(
+    [
+      /Tempat\s*:\s*(.*?)(?=\s*(?:demikian|wassalam|assalam|pengurus|sekretariat))/i,
+      /tempat\s*:\s*(.*?)(?=\s*(?:demikian|wassalam))/i,
+    ],
+    "Kantor"
+  )
+    .split("\n")[0] // Take only first line if multiple lines
+    .split(/[,.]/)[0]; // Take only part before comma or period
+
   return {
-    meetingType: getMatch(
-      [
-        /Perihal\s*:\s*Undangan\s*(.*?)(?=\n)/i,
-        /undangan\s*(rapat\s*harian\s*\d+.*?)(?=\s*(?:hari|tanggal|waktu|dilaksanakan))/i,
-        /acara\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i,
-      ],
-      "Rapat Harian"
-    )
-      .replace(/\s+/g, " ")
-      .trim(),
+    meetingType: meetingType,
+    day: day,
     date: rawDate ? convertToHijriDate(rawDate) : "akan ditentukan",
-    time: rawTime.replace(/\./g, ":"),
-    location: getMatch(
-      [/Tempat\s*:\s*(.*?)(?:\n|$)/i, /lokasi\s*:\s*(.*?)(?:\n|$)/i],
-      "Kantor" // Default value diubah ke "Kantor"
-    ),
+    time: rawTime,
+    location: location,
   };
 }
 
@@ -155,6 +186,7 @@ function createShortReply(details) {
   return (
     `Wa'alaikumussalam Wr. Wb.\n` +
     `Matur nuwun sanget kagem undangan ${details.meetingType}.\n` +
+    (details.day ? `Hari: ${details.day}\n` : "") +
     `Tanggal: ${details.date}\n` +
     `Waktu: ${details.time}\n` +
     `Tempat: ${details.location}\n\n` +
