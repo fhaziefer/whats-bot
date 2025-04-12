@@ -41,7 +41,7 @@ function cleanOcrText(text) {
     .replace(/[~©®™+•”"“|]/g, ":") // ganti simbol kacau dengan titik dua
     .replace(/[^\x00-\x7F]/g, "") // buang karakter non-ASCII (opsional)
     .replace(/[\s]+/g, " ") // normalisasi spasi
-    .replace(/\n+/g, " ") // buang line-break
+    .replace(/\n/g, " \n ") // buang line-break
     .trim();
 }
 
