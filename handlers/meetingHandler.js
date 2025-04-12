@@ -37,17 +37,22 @@ async function extractTextFromImage(imagePath) {
   }
 }
 
+function cleanOcrText(text) {
+  return text
+    .replace(/[~©®™+•”"“|]/g, ":") // ganti simbol kacau dengan titik dua
+    .replace(/[^\x00-\x7F]/g, "") // buang karakter non-ASCII (opsional)
+    .replace(/[\s]+/g, " ") // normalisasi spasi
+    .replace(/\n+/g, " ") // buang line-break
+    .trim();
+}
+
 function extractMeetingDetails(text) {
   if (!text || typeof text !== "string" || text.length < 10) {
     throw new Error("Invalid text input");
   }
 
   // Enhanced text cleaning
-  text = text
-    .replace(/[‘’'`~©+£]/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(/\n/g, " ")
-    .trim();
+  text = cleanOcrText(text);
 
   // 1. Extract date
   const dateMatch = text.match(
