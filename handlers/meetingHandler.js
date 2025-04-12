@@ -23,7 +23,6 @@ async function extractTextFromImage(imagePath) {
     const {
       data: { text },
     } = await worker.recognize(imagePath);
-    console.log("Extracted text:", text);
     return text;
   } catch (error) {
     console.error("OCR Processing Error:", error);
@@ -53,6 +52,7 @@ function extractMeetingDetails(text) {
 
   // Enhanced text cleaning
   text = cleanOcrText(text);
+  console.log(text);
 
   // 1. Extract date
   const dateMatch = text.match(
