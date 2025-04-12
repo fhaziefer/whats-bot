@@ -48,23 +48,26 @@ function extractMeetingDetails(text) {
     throw new Error("Invalid text input");
   }
 
-  // Clean the text
+  // Clean the text of common OCR artifacts
   text = text
-    .replace(/[‘’'`~©+]/g, " ")
+    .replace(/[‘’'`~©+£]/g, " ")
     .replace(/\s+/g, " ")
     .replace(/\n/g, " ")
     .trim();
 
-  // 1. Extract date - very specific pattern for Lirboyo format
+  // 1. Extract date - improved pattern for Lirboyo format with OCR tolerance
   const dateMatch = text.match(
-    /Tanggal\s*:\s*(\d+\s+\w+\s+\d+\s+H\.?\/\s*(\d+\s+\w+\s+\d+\s+M))/i
+    /Tanggal\s*:\s*(\d+\s+\w+\s+\d+\s+H\.?\/\s*(\d+\s+\w+\s+\d+)\s*M)/i
   );
   let gregorianDate = "tanggal belum ditentukan";
   let dayOfWeek = "";
 
   if (dateMatch && dateMatch[2]) {
-    // Get the Gregorian date part
-    gregorianDate = dateMatch[2].replace(/\s*M/i, "").trim();
+    // Get the Gregorian date part and clean OCR artifacts
+    gregorianDate = dateMatch[2]
+      .trim()
+      .replace(/aret/g, "Maret")
+      .replace(/[^\w\s\d]/g, "");
 
     // Convert to Date object to get day name
     try {
@@ -85,7 +88,7 @@ function extractMeetingDetails(text) {
           Desember: "December",
         };
 
-        const day = dateParts[0];
+        const day = dateParts[0].replace(/\D/g, "");
         const month = months[dateParts[1]] || dateParts[1];
         const year = dateParts[2];
 
@@ -108,30 +111,32 @@ function extractMeetingDetails(text) {
     }
   }
 
-  // 2. Extract meeting type - look between "dalam rangka" and "yang insya Allah"
+  // 2. Extract meeting type - improved pattern to stop before date
   const meetingTypeMatch = text.match(
-    /dalam\s+rangka\s+(.*?)(?=\s*yang\s+insya\s+Allah)/i
+    /dalam\s+rangka\s+((?:.(?!\d+\s+\w+\s+\d+\s*M))*?)\s*yang\s+insya\s+Allah/i
   );
-  const meetingType = meetingTypeMatch ? meetingTypeMatch[1].trim() : "Rapat";
+  const meetingType = meetingTypeMatch
+    ? meetingTypeMatch[1].replace(/\s+/g, " ").trim()
+    : "Rapat";
 
-  // 3. Extract time - simple pattern for Lirboyo's time format
+  // 3. Extract time - improved pattern for OCR artifacts
   const timeMatch = text.match(
-    /Waktu\s*[+:]\s*(\d+)[.:](\d+)\s*Wis\s*\(?\s*Malam\s*\)?/i
+    /Waktu\s*[^:\d]*(\d+)[.:](\d+)\s*Wis\s*\(?\s*Malam\s*\)?/i
   );
   let time = "00:00";
   if (timeMatch) {
     const hours = parseInt(timeMatch[1]);
     const minutes = parseInt(timeMatch[2]);
-    // Convert to 24-hour format if "Malam" is present
-    const isPm = text.toLowerCase().includes("malam");
-    time = `${isPm && hours < 12 ? hours + 12 : hours}:${minutes
+    // Convert to 24-hour format since "Malam" indicates PM
+    const adjustedHours = hours < 12 ? hours + 12 : hours;
+    time = `${adjustedHours.toString().padStart(2, "0")}:${minutes
       .toString()
       .padStart(2, "0")}`;
   }
 
-  // 4. Extract location - stop at common endings
+  // 4. Extract location - improved pattern
   const locationMatch = text.match(
-    /Tempat\s*:\s*(.*?)(?=\s*(?:demikian|wassalam|assalam|pengurus))/i
+    /Tempat\s*:\s*(.*?)(?=\s*(?:demikian|wassalam|assalam|pengurus|$))/i
   );
   const location = locationMatch
     ? locationMatch[1].split(/[,.]/)[0].trim()
