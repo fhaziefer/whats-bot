@@ -98,6 +98,9 @@ function extractMeetingDetails(text) {
     throw new Error("Invalid text input");
   }
 
+  // Clean the text first
+  text = text.replace(/[~©]/g, ":").replace(/\s+/g, " ").trim();
+
   const getMatch = (patterns, defaultValue = "") => {
     for (const pattern of patterns) {
       const match = text.match(pattern);
@@ -108,8 +111,8 @@ function extractMeetingDetails(text) {
 
   const rawDate = getMatch(
     [
+      /Tanggal\s*:\s*:\s*(.*?)\s*(?:\n|$)/i,
       /tanggal\s*:\s*(.*?)\s*\/\s*(.*?)(?:\n|$)/i,
-      /tanggal\s*:\s*(.*?)(?:\n|$)/i,
       /dilaksanakan\s*pada\s*(.*?)(?=\s*(?:waktu|tempat))/i,
     ],
     ""
@@ -117,8 +120,8 @@ function extractMeetingDetails(text) {
 
   const rawTime = getMatch(
     [
+      /Waktu\s*:\s*(\d{1,2}:\d{2}\s*Wis\.\s*Malam)/i,
       /waktu\s*:\s*(\d{1,2}\.\d{2}\s*Wis\.\s*Malam)(?:\n|$)/i,
-      /waktu\s*:\s*(\d{1,2}:\d{2}\s*Wis\.\s*Malam)(?:\n|$)/i,
       /waktu\s*:\s*(.*?)(?:\n|$)/i,
     ],
     "00:00"
@@ -127,9 +130,9 @@ function extractMeetingDetails(text) {
   return {
     meetingType: getMatch(
       [
+        /Perihal\s*:\s*Undangan\s*(.*?)(?=\n)/i,
         /undangan\s*(rapat\s*harian\s*\d+.*?)(?=\s*(?:hari|tanggal|waktu|dilaksanakan))/i,
         /acara\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i,
-        /rapat\s*(.*?)(?=\s*(?:hari|tanggal|dilaksanakan))/i,
       ],
       "Rapat Harian"
     )
@@ -138,8 +141,8 @@ function extractMeetingDetails(text) {
     date: rawDate ? convertToHijriDate(rawDate) : "akan ditentukan",
     time: rawTime.replace(/\./g, ":"),
     location: getMatch(
-      [/tempat\s*:\s*(.*?)(?:\n|$)/i, /lokasi\s*:\s*(.*?)(?:\n|$)/i],
-      "akan ditentukan"
+      [/Tempat\s*:\s*(.*?)(?:\n|$)/i, /lokasi\s*:\s*(.*?)(?:\n|$)/i],
+      "Kantor" // Default value diubah ke "Kantor"
     ),
   };
 }
