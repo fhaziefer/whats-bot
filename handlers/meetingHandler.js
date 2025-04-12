@@ -52,67 +52,61 @@ function extractMeetingDetails(text) {
 
   // Enhanced text cleaning
   text = cleanOcrText(text);
+  text = text
+    .replace(/::+/g, ":") // Normalize multiple colons to single
+    .replace(/:\s*:/g, ":") // Handle cases with space between colons
+    .replace(/\s+/g, " ")
+    .trim();
+
   console.log(text);
 
-  // 1. Extract date
-  const dateMatch = text.match(
-    /Tanggal\s*:\s*(\d+\s+\w+\s+\d+\s*H\.?\/\s*(\d+\s+\w+\s+\d+)\s*M)/i
-  );
-  let gregorianDate = "tanggal belum ditentukan";
-  let dayOfWeek = "Jum'at"; // Default to Jum'at
+  // 1. Extract day - handle various colon formats
+  const dayMatch = text.match(/Hari\s*[: ]+\s*([^\n]+?)(?=\s*(?:Tanggal|$))/i);
+  const dayOfWeek = dayMatch ? dayMatch[1].trim() : "Hari belum ditentukan";
 
+  // 2. Extract date - handle colon variations
+  const dateMatch = text.match(
+    /Tanggal\s*[: ]+\s*(\d+\s+\w+\s+\d+\s*H\s*\/\s*(\d+\s+\w+\s+\d+)\s*M)/i
+  );
+
+  let gregorianDate = "tanggal belum ditentukan";
   if (dateMatch && dateMatch[2]) {
-    gregorianDate = dateMatch[2]
-      .trim()
-      .replace(/\bMM?aret\b/g, "Maret")
-      .replace(/[^\w\s\d]/g, "");
+    gregorianDate = dateMatch[2].replace(/\s*M$/, "").trim();
   }
 
-  // 2. Extract meeting type with better stopping condition
-  // 2. Extract meeting type with better stopping condition
+  // 3. Extract meeting type
   const meetingTypeMatch = text.match(
-    /dalam\s+rangka\s+(.*?)(?=\s*(?:yang\s+insya\s+Allah|pada\s*:|$))/i
+    /(?:acara|rapat)\s*(.*?)(?=\s*(?:yang akan|pada\s*[: ]|dilaksanakan|$))/i
   );
   const meetingType = meetingTypeMatch
-    ? meetingTypeMatch[1]
-        .replace(/\s+/g, " ")
-        .replace(/[^\w\s.,-]/g, "")
-        .trim()
-    : "Rapat";
+    ? meetingTypeMatch[1].replace(/\s+/g, " ").trim()
+    : "Rapat Harian";
 
-  // 3. Extract time
+  // 4. Extract time - handle colon variations
   const timeMatch = text.match(
-    /Waktu\s*[^:\d]*(\d{1,2})[.:\s]*(\d{2})?\s*Wis?\s*\(?\s*Malam\s*\)?/i
+    /Waktu\s*[: ]+\s*(\d{1,2})[:.](\d{2})\s*Wis?\s*\.?\s*Malam/i
   );
+
   let time = "00:00";
   if (timeMatch) {
     let hours = parseInt(timeMatch[1]) || 0;
     const minutes = parseInt(timeMatch[2]) || 0;
-    if (text.toLowerCase().includes("malam") && hours < 12) {
-      hours += 12;
-    }
+    if (text.includes("Malam") && hours < 12) hours += 12;
     time = `${hours.toString().padStart(2, "0")}:${minutes
       .toString()
       .padStart(2, "0")}`;
   }
 
-  // 4. Improved location extraction - stops at line end or punctuation
-  const locationMatch = text.match(/Tempat\s*:\s*([^\n.,;]+)/i);
-  let location = "Kantor Muktamar P2L"; // Default value
-  if (locationMatch) {
-    location = locationMatch[1]
-      .split(/[.,;]/)[0] // Split at punctuation
-      .replace(/Demikian.*$/i, "") // Remove any "Demikian" text
-      .trim();
-
-    // Special case for P2L
-    if (location.includes("P2L")) {
-      location = "Kantor Muktamar P2L";
-    }
-  }
+  // 5. Extract location - handle colon variations
+  const locationMatch = text.match(/Tempat\s*[: ]+\s*([^\n.,;]+)/i);
+  const location = locationMatch
+    ? locationMatch[1].split(/[.,;]/)[0].trim()
+    : "Kantor";
 
   return {
-    meetingType: meetingType,
+    meetingType: meetingType.includes("Rapat")
+      ? meetingType
+      : "Rapat " + meetingType,
     day: dayOfWeek,
     date: gregorianDate,
     time: time,
