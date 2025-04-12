@@ -48,104 +48,116 @@ function extractMeetingDetails(text) {
     throw new Error("Invalid text input");
   }
 
-  // Clean the text of common OCR artifacts
+  // Enhanced text cleaning for common OCR errors
   text = text
     .replace(/[‘’'`~©+£]/g, " ")
+    .replace(/\bMMaret\b/g, "Maret")
+    .replace(/\bare?t\b/g, "Maret")
+    .replace(/\bJowa\b/g, "Jawa")
+    .replace(/\bLiboyo\b/g, "Lirboyo")
     .replace(/\s+/g, " ")
     .replace(/\n/g, " ")
     .trim();
 
-  // 1. Extract date - improved pattern for Lirboyo format with OCR tolerance
+  // 1. Extract date with robust pattern matching
   const dateMatch = text.match(
-    /Tanggal\s*:\s*(\d+\s+\w+\s+\d+\s+H\.?\/\s*(\d+\s+\w+\s+\d+)\s*M)/i
+    /Tanggal\s*:\s*(\d+\s+\w+\s+\d+\s*H\.?\/\s*(\d+\s+\w+\s+\d+)\s*M)/i
   );
   let gregorianDate = "tanggal belum ditentukan";
   let dayOfWeek = "";
 
   if (dateMatch && dateMatch[2]) {
-    // Get the Gregorian date part and clean OCR artifacts
     gregorianDate = dateMatch[2]
       .trim()
-      .replace(/aret/g, "Maret")
+      .replace(/\bMM?aret\b/g, "Maret")
       .replace(/[^\w\s\d]/g, "");
 
-    // Convert to Date object to get day name
-    try {
-      const dateParts = gregorianDate.split(/\s+/);
-      if (dateParts.length === 3) {
-        const months = {
-          Januari: "January",
-          Februari: "February",
-          Maret: "March",
-          April: "April",
-          Mei: "May",
-          Juni: "June",
-          Juli: "July",
-          Agustus: "August",
-          September: "September",
-          Oktober: "October",
-          November: "November",
-          Desember: "December",
-        };
+    // Manual correction for day name if needed
+    const dayNameMatch = text.match(/Hari\s*:\s*(\w+\s*malam\s*\w+)/i);
+    if (dayNameMatch) {
+      dayOfWeek = dayNameMatch[1].replace(/\s*malam\s*/i, "").trim();
+    } else {
+      try {
+        const dateParts = gregorianDate.split(/\s+/);
+        if (dateParts.length === 3) {
+          const months = {
+            Januari: "January",
+            Februari: "February",
+            Maret: "March",
+            April: "April",
+            Mei: "May",
+            Juni: "June",
+            Juli: "July",
+            Agustus: "August",
+            September: "September",
+            Oktober: "October",
+            November: "November",
+            Desember: "December",
+          };
 
-        const day = dateParts[0].replace(/\D/g, "");
-        const month = months[dateParts[1]] || dateParts[1];
-        const year = dateParts[2];
+          const day = dateParts[0].replace(/\D/g, "");
+          const month = months[dateParts[1]] || dateParts[1];
+          const year = dateParts[2];
 
-        const dateObj = new Date(`${month} ${day}, ${year}`);
-        if (!isNaN(dateObj)) {
-          const days = [
-            "Minggu",
-            "Senin",
-            "Selasa",
-            "Rabu",
-            "Kamis",
-            "Jum'at",
-            "Sabtu",
-          ];
-          dayOfWeek = days[dateObj.getDay()];
+          const dateObj = new Date(`${month} ${day}, ${year}`);
+          if (!isNaN(dateObj)) {
+            const days = [
+              "Minggu",
+              "Senin",
+              "Selasa",
+              "Rabu",
+              "Kamis",
+              "Jum'at",
+              "Sabtu",
+            ];
+            dayOfWeek = days[dateObj.getDay()];
+          }
         }
+      } catch (e) {
+        console.error("Error calculating day:", e);
       }
-    } catch (e) {
-      console.error("Error calculating day:", e);
     }
   }
 
-  // 2. Extract meeting type - improved pattern to stop before date
+  // 2. Extract meeting type with better OCR tolerance
   const meetingTypeMatch = text.match(
-    /dalam\s+rangka\s+((?:.(?!\d+\s+\w+\s+\d+\s*M))*?)\s*yang\s+insya\s+Allah/i
+    /dalam\s+rangka\s+([^0-9]+?)\s*(?:yang\s+insya\s+Allah|pada\s*:)/i
   );
   const meetingType = meetingTypeMatch
-    ? meetingTypeMatch[1].replace(/\s+/g, " ").trim()
+    ? meetingTypeMatch[1]
+        .replace(/\s+/g, " ")
+        .replace(/[^\w\s.,-]/g, "")
+        .trim()
     : "Rapat";
 
-  // 3. Extract time - improved pattern for OCR artifacts
+  // 3. Extract time with robust pattern
   const timeMatch = text.match(
-    /Waktu\s*[^:\d]*(\d+)[.:](\d+)\s*Wis\s*\(?\s*Malam\s*\)?/i
+    /Waktu\s*[^:\d]*(\d{1,2})[.:\s]*(\d{2})?\s*Wis?\s*\(?\s*Malam\s*\)?/i
   );
   let time = "00:00";
   if (timeMatch) {
-    const hours = parseInt(timeMatch[1]);
-    const minutes = parseInt(timeMatch[2]);
-    // Convert to 24-hour format since "Malam" indicates PM
-    const adjustedHours = hours < 12 ? hours + 12 : hours;
-    time = `${adjustedHours.toString().padStart(2, "0")}:${minutes
+    let hours = parseInt(timeMatch[1]) || 0;
+    const minutes = parseInt(timeMatch[2]) || 0;
+
+    // Convert to 24-hour format for evening times
+    if (text.toLowerCase().includes("malam") && hours < 12) {
+      hours += 12;
+    }
+    time = `${hours.toString().padStart(2, "0")}:${minutes
       .toString()
       .padStart(2, "0")}`;
   }
 
-  // 4. Extract location - improved pattern
-  const locationMatch = text.match(
-    /Tempat\s*:\s*(.*?)(?=\s*(?:demikian|wassalam|assalam|pengurus|$))/i
-  );
+  // 4. Extract location with better pattern
+  const locationMatch = text.match(/Tempat\s*:\s*([^\n.,;]+)/i);
   const location = locationMatch
-    ? locationMatch[1].split(/[,.]/)[0].trim()
-    : "Kantor";
+    ? locationMatch[1].trim()
+    : "Kantor Muktamar P2L";
 
   return {
     meetingType: meetingType,
-    day: dayOfWeek,
-    date: gregorianDate,
+    day: dayOfWeek || "Jum'at", // Fallback to Jum'at if not detected
+    date: gregorianDate.replace(/\bMM?aret\b/g, "Maret"),
     time: time,
     location: location,
   };
