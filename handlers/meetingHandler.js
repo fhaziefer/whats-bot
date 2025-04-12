@@ -28,7 +28,8 @@ async function extractTextFromImage(imagePath) {
     const {
       data: { text },
     } = await worker.recognize(imagePath);
-    console.log(`Extracted ${text.length} characters`);
+    // console.log(`Extracted ${text.length} characters`);
+    console.log(text);
     return text;
   } catch (error) {
     console.error("OCR Processing Error:", error);
