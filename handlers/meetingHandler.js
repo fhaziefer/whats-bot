@@ -17,7 +17,7 @@ async function extractTextFromImage(imagePath) {
 
   try {
     worker = await createWorker({
-      logger: (m) => console.log(m.status),
+      // logger: (m) => console.log(m.status),
       // Simplified configuration - let the package handle its own paths
       langPath: "https://tessdata.projectnaptha.com/4.0.0",
     });
