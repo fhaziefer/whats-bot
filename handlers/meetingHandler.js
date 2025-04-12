@@ -12,7 +12,11 @@ const unlink = fs.promises.unlink;
 const mkdir = fs.promises.mkdir;
 
 async function extractTextFromImage(imagePath) {
-  const worker = await createWorker();
+  const worker = await createWorker({
+    corePath: "node_modules/tesseract.js/dist/tesseract-core.wasm.js",
+    workerPath: "node_modules/tesseract.js/dist/worker.min.js",
+    langPath: "https://tessdata.projectnaptha.com/4.0.0",
+  });
   try {
     await worker.loadLanguage("eng");
     await worker.initialize("eng");
